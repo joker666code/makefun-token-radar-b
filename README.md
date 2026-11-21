@@ -245,6 +245,24 @@ implied value, multiple and factor is identical.
   with no realized launch valuations in the snapshot, calibration
   cannot be backtested — the audit is the most the data allows.
 
+## v8 (2026-11-21)
+
+Same model, same ranking, same $4.99B total — `board.json` and
+`data.js` are byte-identical to v7. The only chaseable item the v7
+re-rating left was its footnote: first-screen density was verified at
+1440×900 and 390px, not at shorter laptop heights. Measured first:
+at 720px height the v7 board showed a single row. So v8 tightens the
+first screen only — a shorter lede (same two facts: records no token,
+never a prediction), tighter stats, method fold and controls (all six
+controls now fit one row at desktop width), a more compact leader
+sentence with its wording untouched, and 1px less cell padding. The
+board now starts at 473px (v7: 587px) and shows 8 rows at 1440×900,
+5 at 768px height, and 4 at 720px height, with no horizontal overflow
+at any of the five short viewports tested. Interaction tests:
+83/83 (the v7 66 plus lede and short-viewport checks). The value
+backtest gap is not chased: with no realized launch valuations in the
+snapshot it cannot be built, so no table was added for it.
+
 ## Run it
 
 ```sh

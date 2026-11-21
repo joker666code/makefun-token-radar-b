@@ -17,16 +17,16 @@
 body {
   margin: 0 auto;
   max-width: 1080px;
-  padding: 20px 20px 48px;
+  padding: 14px 20px 48px;
   background: var(--paper);
   color: var(--ink);
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 h1 {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 34px;
+  font-size: 30px;
   line-height: 1.15;
-  margin: 6px 0 10px;
+  margin: 4px 0 8px;
   letter-spacing: -0.01em;
 }
 .eyebrow {
@@ -37,30 +37,32 @@ h1 {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-.lede { max-width: 72ch; margin: 0 0 12px; font-size: 16px; }
+/* v8: the lede is one line shorter (see index.html) and set a point
+   smaller, so the masthead stops sprawling before the board. */
+.lede { max-width: 72ch; margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 .stats div {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 7px 14px;
 }
 .stats dt { font-size: 12px; color: var(--muted); margin: 0; }
-.stats dd { font-size: 22px; font-weight: 700; margin: 2px 0 0; font-family: Georgia, serif; }
+.stats dd { font-size: 20px; font-weight: 700; margin: 2px 0 0; font-family: Georgia, serif; }
 .method {
   background: var(--card);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   border-radius: 8px;
-  padding: 8px 16px;
-  margin-bottom: 10px;
+  padding: 6px 14px;
+  margin-bottom: 8px;
 }
-.method summary { cursor: pointer; font-weight: 700; font-size: 16px; }
+.method summary { cursor: pointer; font-weight: 700; font-size: 15px; }
 /* The folded method line is the first screen's one weak affordance (v7
    looks note): say plainly that it opens, and hide the hint once it is. */
 .sum-hint { float: right; font-size: 12px; color: var(--accent); font-weight: 700; padding-top: 3px; }
@@ -98,13 +100,17 @@ h1 {
 #sensitivity { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 #sensitivity h3 { font-size: 15px; margin: 0 0 6px; }
 #sensitivity p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+/* v8: the leader sentence keeps its exact wording (the v5–v7 tests
+   assert it verbatim) but is set smaller and tighter, so the
+   four-line read stops eating a quarter of the first screen. */
 .lens-lead {
   border: 1px solid;
   border-left-width: 4px;
   border-radius: 8px;
-  padding: 8px 14px;
-  margin: 0 0 8px;
-  font-size: 14px;
+  padding: 6px 12px;
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.45;
 }
 .lens-lead.early { background: var(--sage-soft); border-color: var(--sage); }
 .lens-lead.implied { background: var(--gold-soft); border-color: var(--gold); }
@@ -122,16 +128,19 @@ h1 {
 }
 #showMore:hover, #showAll:hover { background: var(--accent-soft); }
 .more button + button { margin-left: 8px; }
+/* v8: tighter controls — smaller gaps, padding and minimum widths —
+   so the six controls fit on one row at desktop width instead of
+   wrapping to two, which was 73px of pre-board stack on its own. */
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 6px 10px;
   align-items: end;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 6px;
+  padding: 6px 10px;
+  margin-bottom: 5px;
 }
 .controls label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
 .controls label.check { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 6px; color: var(--ink); }
@@ -141,10 +150,10 @@ h1 {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 5px 7px;
-  min-width: 120px;
+  padding: 4px 6px;
+  min-width: 100px;
 }
-.count { color: var(--muted); font-size: 13px; margin: 6px 0; }
+.count { color: var(--muted); font-size: 13px; margin: 4px 0; }
 .detail {
   background: var(--card);
   border: 1px solid var(--line);
@@ -199,7 +208,9 @@ h1 {
    let the table scroll inside its own box instead of pushing the page
    wider than the viewport (mobile check, v4). */
 .board-wrap, .table-wrap { overflow-x: auto; }
-.board th, .board td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+/* v8: one pixel less cell padding — a row is ~2px shorter, which is
+   one more board row on a 720px-high laptop for no readability cost. */
+.board th, .board td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 .board thead th { background: var(--gold-soft); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
 .board tbody tr { cursor: pointer; }
 .board tbody tr:hover { background: var(--accent-soft); }
