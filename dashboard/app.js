@@ -47,23 +47,34 @@
   }).join('');
   mult.innerHTML = '<p>Category multiples actually used (median mcap/TVL of token-having peers, ' +
     'shrunk toward the global median ' + R.global_median.toFixed(3) + '):</p>' +
-    '<table class="mult-table"><thead><tr><th>Category</th><th>Peers</th><th>Multiple</th></tr></thead><tbody>' +
-    cells + '</tbody></table>';
+    '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th>Peers</th><th>Multiple</th></tr></thead><tbody>' +
+    cells + '</tbody></table></div>';
 
   var catSummary = document.getElementById('catSummary');
   var sumCells = R.category_summary.map(function (c) {
-    return '<tr><td>' + esc(c.category) + '</td><td class="num">' + c.rows + '</td>' +
+    return '<tr class="cat-row" data-cat="' + esc(c.category) + '" title="Filter the board by ' + esc(c.category) + '"><td>' + esc(c.category) + '</td><td class="num">' + c.rows + '</td>' +
       '<td class="num">' + money(c.total_implied_usd) + '</td><td class="num">' + c.multiple.toFixed(3) + '×</td>' +
       '<td class="num">' + (c.share * 100).toFixed(1) + '%</td></tr>';
   }).join('');
   var topCat = R.category_summary[0];
   catSummary.innerHTML = '<h2>Where the implied value sits</h2>' +
-    '<p>Top 10 categories by total implied value on this board — the multiple shown is the one the model actually used for that category.</p>' +
-    '<table class="mult-table"><thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Total implied</th><th class="num">Multiple</th><th class="num">Share</th></tr></thead><tbody>' +
-    sumCells + '</tbody></table>' +
+    '<p>Top 10 categories by total implied value on this board — the multiple shown is the one the model actually used for that category. Click a row to filter the board by that category; click it again to clear.</p>' +
+    '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Total implied</th><th class="num">Multiple</th><th class="num">Share</th></tr></thead><tbody>' +
+    sumCells + '</tbody></table></div>' +
     '<p><strong>Concentration:</strong> ' + esc(topCat.category) + ' alone holds ' +
     (topCat.share * 100).toFixed(1) + '% of the board\u2019s implied value across ' + topCat.rows +
     ' rows — the value is concentrated, not spread. A category this heavy moves the whole board.</p>';
+  // Clickable category rows (v4): a row filters the board to its category
+  // (the same control as the Category dropdown), a second click clears it.
+  catSummary.querySelectorAll('.cat-row').forEach(function (tr) {
+    tr.addEventListener('click', function () {
+      var cat = tr.getAttribute('data-cat');
+      catSel.value = (catSel.value === cat) ? '' : cat;
+      shownCount = SHOW;
+      render();
+      document.querySelector('.board').scrollIntoView({ block: 'start' });
+    });
+  });
 
   var catSel = document.getElementById('cat');
   var cats = Array.from(new Set(R.rows.map(function (r) { return r.category || '(no category)'; }))).sort();
@@ -81,6 +92,7 @@
   var sortEl = document.getElementById('sort');
   var rowsEl = document.getElementById('rows');
   var countEl = document.getElementById('count');
+  var earlyLeadEl = document.getElementById('earlyLead');
   var moreEl = document.getElementById('more');
   var detailEl = document.getElementById('detail');
   var lensHead = document.getElementById('lensHead');
@@ -174,7 +186,7 @@
       spike = '<p class="warn"><strong>Spike check — do not trust the jump yet.</strong> Its 7-day TVL rose +' +
         row.change_7d.toFixed(1) + '%, but the model caps growth at +60%, so momentum is ' +
         row.momentum.toFixed(2) + '× and no higher. Its early-mover score ' + row.early_score.toFixed(2) +
-        ' is momentum × youth (' + ageLabel(row.age_days) + ' old), so the spike alone lifts its early rank. ' +
+        ' is momentum × youth (' + (row.age_days === null || row.age_days === undefined ? 'age unknown' : row.age_days + ' days old') + '), so the spike alone lifts its early rank. ' +
         'Treat the spike as unverified until the Week 0 check finds one deposit or a new vault behind it; ' +
         'if the inflow reverses, the implied value falls with it.</p>';
     }
@@ -183,7 +195,7 @@
       var youth = 1.5 - Math.min(row.age_days === null ? 365 : row.age_days, 1095) / 1095;
       earlyRead = '<p class="compare">Early-movers read: early score ' + row.early_score.toFixed(2) +
         ' = momentum ' + row.momentum.toFixed(2) + '× × youth ' + youth.toFixed(2) +
-        ' (' + ageLabel(row.age_days) + ' old). Youth, not size, is what this lens rewards.</p>';
+        ' (' + (row.age_days === null || row.age_days === undefined ? 'age unknown' : row.age_days + ' days old') + '). Youth, not size, is what this lens rewards.</p>';
     }
     detailEl.hidden = false;
     detailEl.innerHTML =
@@ -220,6 +232,54 @@
     var state = currentRows();
     var lens = state.lens;
     lensHead.textContent = lens === 'early' ? 'Early score' : lens === 'density' ? 'Density' : 'Share';
+    // Keep the clicked category-summary row highlighted while its filter is on.
+    catSummary.querySelectorAll('.cat-row').forEach(function (tr) {
+      tr.classList.toggle('active', catSel.value !== '' && tr.getAttribute('data-cat') === catSel.value);
+    });
+    // Early-movers leader, in one sentence at the top of the board (v4):
+    // the score's arithmetic, why it leads, and the spike caveat when the
+    // leader's jump was capped. All figures come from the row itself, so
+    // the sentence stays true under any filter.
+    if (lens === 'early' && state.list.length > 0) {
+      var lead = state.list[0];
+      var youthOf = function (r) { return 1.5 - Math.min(r.age_days === null || r.age_days === undefined ? 365 : r.age_days, 1095) / 1095; };
+      // Exact days, not the table's rounded "2mo": the reader should be
+      // able to check youth = 1.5 − days/1095 from the sentence itself.
+      var ageExact = function (r) {
+        return (r.age_days === null || r.age_days === undefined)
+          ? 'unknown age' : r.age_days + (r.age_days === 1 ? ' day' : ' days') + ' old';
+      };
+      var filtered = qEl.value.trim() !== '' || catSel.value !== '' ||
+        Number(minTvlEl.value) > 0 || watchEl.checked;
+      var growthBit = (lead.change_7d === null || lead.change_7d === undefined)
+        ? '7-day change unreported'
+        : '7-day TVL ' + (lead.change_7d > 0 ? '+' : '') + lead.change_7d.toFixed(1) + '%' +
+          (lead.change_7d >= 60 ? ', capped at +60%' : '');
+      var secondBit = '';
+      var tieBit = ' — the highest momentum × youth combination ' +
+        (filtered ? 'among the matching rows' : 'on the board');
+      if (state.list.length > 1) {
+        var second = state.list[1];
+        secondBit = ', ahead of ' + second.name + ' (' + second.early_score.toFixed(2) +
+          ', ' + ageExact(second) + ')';
+        // The usual reason a leader leads: same capped momentum as the
+        // runner-up, so youth decides it. Say so only when it is true.
+        if (Math.abs(second.momentum - lead.momentum) < 0.001) {
+          tieBit = ' — tied on momentum ' + lead.momentum.toFixed(2) + '×, it leads on youth (' +
+            youthOf(lead).toFixed(2) + ' vs ' + youthOf(second).toFixed(2) + ')';
+        }
+      }
+      var spikeBit = (lead.change_7d !== null && lead.change_7d !== undefined && lead.change_7d >= 60)
+        ? ', and the spike stays unverified until its Week 0 check'
+        : '';
+      earlyLeadEl.hidden = false;
+      earlyLeadEl.textContent = 'Early-movers leader ' + lead.name + ' scores ' + lead.early_score.toFixed(2) +
+        ' = momentum ' + lead.momentum.toFixed(2) + '× (' + growthBit + ') × youth ' + youthOf(lead).toFixed(2) +
+        ' (' + ageExact(lead) + ')' + secondBit + tieBit + spikeBit + '.';
+    } else {
+      earlyLeadEl.hidden = true;
+      earlyLeadEl.textContent = '';
+    }
     var shown = state.list.slice(0, shownCount);
     var maxImplied = top.implied_value_usd;
     rowsEl.innerHTML = shown.map(function (r) {

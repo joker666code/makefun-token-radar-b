@@ -20,7 +20,7 @@
 </header>
 
 <main>
-  <details class="method" id="method">
+  <details class="method" id="method" open>
     <summary>How the value is worked out — the whole model, in the open</summary>
     <p><code>implied = TVL × category multiple × momentum × seasoning × breadth × credibility</code></p>
     <ul>
@@ -70,9 +70,11 @@
   </section>
 
   <p class="count" id="count"></p>
+  <p class="early-lead" id="earlyLead" hidden></p>
 
   <section class="detail" id="detail" hidden></section>
 
+  <div class="board-wrap">
   <table class="board">
     <thead><tr>
       <th>#</th><th>Protocol</th><th>Category</th><th>Chains</th>
@@ -81,6 +83,7 @@
     </tr></thead>
     <tbody id="rows"></tbody>
   </table>
+  </div>
 
   <p class="more" id="more"></p>
   <div class="more"><button id="showMore" type="button">Show more</button></div>
@@ -102,7 +105,11 @@
   listed) plus the sharpest warning the row's own flags raise — and the detail view now spells
   out the spike check for capped 7-day jumps and the early-score arithmetic when the
   early-movers lens is on; the category summary calls out its concentration, and each detail
-  shows the row's share of the board's total implied value.</p>
+  shows the row's share of the board's total implied value. v4 opens the method box by
+  default so the 34 category multiples are visible on load, makes every category-summary
+  row clickable to filter the board by that category (click again to clear), and reads
+  the early-movers leader in one sentence at the top of the board whenever that lens is
+  on; the model and the ranking are unchanged.</p>
 </footer>
 <script src="app.js"></script>
 </body>

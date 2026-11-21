@@ -95,6 +95,39 @@ explanation, not re-scoring:
   (+4448.5% in 7 days, 45 days old) with the spike warning and the Week 0
   step visible, instead of the #1 detail.
 
+## v4 (2026-11-21)
+
+Same model, same ranking, same $4.99B total — the work is dashboard
+interaction and explanation, not re-scoring:
+
+- **Category summary rows are clickable.** Clicking a row filters the
+  board to that category (the same control as the Category dropdown, and
+  the row stays highlighted while the filter is on); clicking it again
+  clears the filter. Risk Curators → 34 rows, Dexs → 21, all verified by
+  an automated interaction test.
+- **The method box is open by default**, so the formula, the five
+  factors and the 34 category multiples are visible on load instead of
+  behind a collapsed summary.
+- **The early-movers lens reads its leader in one sentence** at the top
+  of the board: Shift DeFi scores 1.81 = momentum 1.24× (7-day TVL
+  +4448.5%, capped at +60%) × youth 1.46 (45 days old), ahead of August
+  Digital (1.78, 73 days old) — tied on capped momentum, it leads on
+  youth. The sentence is computed from the rows, so under any filter it
+  names that filter's leader instead. The detail view's early read and
+  spike box now also give age in exact days, so youth can be checked
+  from the words.
+- **Mobile verified at 390px wide.** The 720px media query held for the
+  header, stats and method box, but the 9-column board table pushed the
+  page to 849px wide; the board and summary tables now scroll inside
+  their own boxes and the page stays 390px. The mobile shots are
+  verification-only and are not shipped (the dossier still holds 4).
+- **Screenshot 3 changes:** `3-filtered.png` (watchlist filter) is
+  replaced by `3-method.png` (method box open on load). The watchlist
+  filter stays in the controls and its 40/40 coverage is proven by
+  `board.json` and the header stats; no other shot proved the method box
+  opens by default. 1-board now scrolls to the count line first, since
+  the open method box pushes the board below the fold.
+
 ## Run it
 
 ```sh
