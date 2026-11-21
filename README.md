@@ -167,6 +167,39 @@ explanation and layout, not re-scoring:
   the top). Screenshot 4 now frames the density leader sentence with
   the density board; screenshot 1 frames the implied leader sentence.
 
+## v6 (2026-11-21)
+
+Same model, same ranking, same $4.99B total — the work is dashboard
+explanation and layout, not re-scoring:
+
+- **Every protocol's detail now reads its standing against its lens
+  leader**, not just the board-top leader. Open any row and the detail
+  shows one line next to the why-this-rank sentence: the leader gets
+  the board-top sentence itself (Steakhouse Financial is worth $840.3M
+  …), any other row gets its lens rank and metric plus the same
+  why-parts comparison from its own side (Veda ranks #4 of 198 by
+  implied value, behind leader Steakhouse Financial, …). The three
+  leader sentences are now one shared function, so the board top and
+  the detail can never disagree. The v3 early-only detail read is
+  folded into this line — its arithmetic is still there for the early
+  lens, for every row.
+- **The category summary shows all 33 categories by default.** It sits
+  below the board now, so the extra ~500px costs no first-screen space
+  (the board still starts inside 900px); the toggle is gone, the
+  click-to-filter rows and the long-tail callout ($495.1M, 9.9%) stay.
+  (Correction to the v5 record: the v5 report said the tail 23 held
+  $607.2M / 12.2% — that was a reporting slip, not a page figure. The
+  page always computed the tail from the rows, and board.json + data.js
+  agree it is $495.1M / 9.9%: Top 10 $4,499.1M, total $4,994.2M.)
+- **Show all 198.** A second button beside Show more loads every
+  matching row in one click (198 with no filter on) instead of paging
+  +60 at a time; Show more still works the same way.
+- **Mobile gets the category back as a card-style sub-line.** The
+  Category column stays hidden at 390px, but each protocol name now
+  carries its category in small grey type underneath it, so no
+  information is lost to the v5 column cut — and the board still
+  measures 350px with no sideways scroll in all three lenses.
+
 ## Run it
 
 ```sh

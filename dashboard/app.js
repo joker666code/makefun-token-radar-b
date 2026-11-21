@@ -90,24 +90,14 @@
   var restTotal = restCats.reduce(function (a, c) { return a + c.total_implied_usd; }, 0);
   var restShare = restTotal / R.total_implied_usd;
   catSummary.innerHTML = '<h2>Where the implied value sits</h2>' +
-    '<p>Top 10 of ' + fullSummary.length + ' categories by total implied value on this board — the multiple shown is the one the model actually used for that category. Click a row to filter the board by that category; click it again to clear. The other ' + restCats.length + ' categories together hold ' + money(restTotal) + ' (' + (restShare * 100).toFixed(1) + '% of the board) — the long tail.</p>' +
+    '<p>All ' + fullSummary.length + ' categories by total implied value on this board — the multiple shown is the one the model actually used for that category. Click a row to filter the board by that category; click it again to clear. The ' + restCats.length + ' categories after the top 10 together hold ' + money(restTotal) + ' (' + (restShare * 100).toFixed(1) + '% of the board) — the long tail.</p>' +
     '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Total implied</th><th class="num">Multiple</th><th class="num">Share</th></tr></thead><tbody>' +
-    fullSummary.slice(0, 10).map(sumRow).join('') + '</tbody><tbody id="catRest" hidden>' +
-    restCats.map(sumRow).join('') + '</tbody></table></div>' +
-    '<button class="cat-toggle" id="catToggle" type="button" aria-expanded="false">Show all ' + fullSummary.length + ' categories</button>' +
+    fullSummary.map(sumRow).join('') + '</tbody></table></div>' +
     '<p><strong>Concentration:</strong> ' + esc(topCat.category) + ' alone holds ' +
     (topCat.share * 100).toFixed(1) + '% of the board\u2019s implied value across ' + topCat.rows +
     ' rows — the value is concentrated, not spread. A category this heavy moves the whole board.</p>';
-  // Show-all toggle (v5): the 23 tail categories are in the table from
-  // the start (and clickable), just folded until asked for.
-  var catToggle = document.getElementById('catToggle');
-  var catRest = document.getElementById('catRest');
-  catToggle.addEventListener('click', function () {
-    var open = catRest.hidden;
-    catRest.hidden = !open;
-    catToggle.setAttribute('aria-expanded', String(open));
-    catToggle.textContent = open ? 'Show fewer (top 10)' : 'Show all ' + fullSummary.length + ' categories';
-  });
+  // (v6: no toggle any more — the table sits below the board now, so all
+  // 33 rows show by default; the click-to-filter rows are unchanged.)
   // Clickable category rows (v4): a row filters the board to its category
   // (the same control as the Category dropdown), a second click clears it.
   catSummary.querySelectorAll('.cat-row').forEach(function (tr) {
@@ -234,13 +224,12 @@
         'Treat the spike as unverified until the Week 0 check finds one deposit or a new vault behind it; ' +
         'if the inflow reverses, the implied value falls with it.</p>';
     }
-    var earlyRead = '';
-    if (lensEl.value === 'early') {
-      var youth = 1.5 - Math.min(row.age_days === null ? 365 : row.age_days, 1095) / 1095;
-      earlyRead = '<p class="compare">Early-movers read: early score ' + row.early_score.toFixed(2) +
-        ' = momentum ' + row.momentum.toFixed(2) + '× × youth ' + youth.toFixed(2) +
-        ' (' + (row.age_days === null || row.age_days === undefined ? 'age unknown' : row.age_days + ' days old') + '). Youth, not size, is what this lens rewards.</p>';
-    }
+    // Lens read (v6): the row's standing under the current lens, against
+    // the lens leader — the same comparison logic as the board-top leader
+    // sentence, but for any row, not just the leader. When this row IS
+    // the leader, it is that sentence. (Replaces the v3 early-only read:
+    // the early arithmetic now lives inside this line for every lens.)
+    var lensRead = '<p class="compare">' + esc(detailLensRead(row)) + '</p>';
     detailEl.hidden = false;
     detailEl.innerHTML =
       '<button class="close" id="closeDetail">Close ×</button>' +
@@ -248,13 +237,13 @@
       '<p class="sub">' + esc(row.category || 'No category') + ' · ' + esc(row.chains.join(', ')) +
       ' · TVL ' + money(row.tvl_usd) + ' · snapshot ' + esc(R.as_of) + '</p>' +
       '<p class="why">' + esc(whySentence(row)) + '</p>' +
+      lensRead +
       spike +
       '<p class="compare">#' + row.category_rank + ' in ' + esc(row.category || 'no category') + ' · ' +
       (row.category_implied_share * 100).toFixed(1) + '% of its category\u2019s implied value · ' +
       row.peers + ' token-having peer' + (row.peers === 1 ? '' : 's') + ' set the ' + row.multiple.toFixed(3) +
       '× multiple · value density ' + row.density.toFixed(3) + '× · ' +
       (row.implied_value_usd / R.total_implied_usd * 100).toFixed(1) + '% of the board\u2019s total implied value.</p>' +
-      earlyRead +
       '<div class="factors">' +
       factorBar('Category multiple', row.multiple, 0.8, row.multiple.toFixed(3) + '×') +
       factorBar('Momentum', row.momentum, 1.24, row.momentum.toFixed(2) + '×') +
@@ -272,12 +261,10 @@
     detailEl.scrollIntoView({ block: 'start' });
   }
 
-  // Leader in one sentence, for every lens (v4 early, v5 implied +
-  // density): the leader's own figures, why it leads the runner-up, and
-  // the caveat when the leader's jump was capped. All figures come from
-  // the rows, so the sentence stays true under any filter. The leader is
-  // picked by the lens metric, not by the board's sort order — sorting by
-  // TVL must not change who the sentence calls the leader.
+  // Leader in one sentence, for every lens — see lensSentence /
+  // earlySentence / densitySentence / impliedSentence below (v4 early,
+  // v5 implied + density, v6 extracted so the detail view reuses them).
+  // The comparison itself is split into parts by whyParts, below.
   var FACTORS = [
     { key: 'momentum', label: 'momentum', disp: function (r) { return r.momentum.toFixed(2) + '×'; } },
     { key: 'seasoning', label: 'seasoning', disp: function (r) { return r.seasoning.toFixed(2) + '×'; },
@@ -334,6 +321,138 @@
     return { lead: sorted[0], second: sorted[1] || null };
   }
 
+
+  // Shared lens helpers (v6): youth and exact age are used by both the
+  // board-top leader sentence and the detail lens read.
+  function youthOf(r) { return 1.5 - Math.min(r.age_days === null || r.age_days === undefined ? 365 : r.age_days, 1095) / 1095; }
+  function ageExact(r) {
+    return (r.age_days === null || r.age_days === undefined)
+      ? 'unknown age' : r.age_days + (r.age_days === 1 ? ' day' : ' days') + ' old';
+  }
+  // One factor compared between two rows, from the first row's side.
+  function cmpFactor(label, a, b, fmt) {
+    if (Math.abs(a - b) < 0.001) return 'tied on ' + label + ' (' + fmt(a) + ')';
+    return (a > b ? 'leading on ' : 'trailing on ') + label + ' (' + fmt(a) + ' vs ' + fmt(b) + ')';
+  }
+
+  // Leader in one sentence, for every lens (v4 early, v5 implied +
+  // density, v6 extracted so the detail view can reuse them): the leader's
+  // own figures, why it leads the runner-up, and the caveat when the
+  // leader's jump was capped. All figures come from the rows, so the
+  // sentence stays true under any filter. The leader is picked by the
+  // lens metric, not by the board's sort order.
+  function earlySentence(list, filtered) {
+    var sorted = list.slice().sort(function (a, b) { return b.early_score - a.early_score || b.implied_value_usd - a.implied_value_usd; });
+    var lead = sorted[0];
+    var growthBit = (lead.change_7d === null || lead.change_7d === undefined)
+      ? '7-day change unreported'
+      : '7-day TVL ' + (lead.change_7d > 0 ? '+' : '') + lead.change_7d.toFixed(1) + '%' +
+        (lead.change_7d >= 60 ? ', capped at +60%' : '');
+    var secondBit = '';
+    var tieBit = ' — the highest momentum × youth combination ' +
+      (filtered ? 'among the matching rows' : 'on the board');
+    if (sorted.length > 1) {
+      var second = sorted[1];
+      secondBit = ', ahead of ' + second.name + ' (' + second.early_score.toFixed(2) +
+        ', ' + ageExact(second) + ')';
+      // The usual reason a leader leads: same capped momentum as the
+      // runner-up, so youth decides it. Say so only when it is true.
+      if (Math.abs(second.momentum - lead.momentum) < 0.001) {
+        tieBit = ' — tied on momentum ' + lead.momentum.toFixed(2) + '×, it leads on youth (' +
+          youthOf(lead).toFixed(2) + ' vs ' + youthOf(second).toFixed(2) + ')';
+      }
+    }
+    var spikeBit = (lead.change_7d !== null && lead.change_7d !== undefined && lead.change_7d >= 60)
+      ? ', and the spike stays unverified until its Week 0 check'
+      : '';
+    return 'Early-movers leader ' + lead.name + ' scores ' + lead.early_score.toFixed(2) +
+      ' = momentum ' + lead.momentum.toFixed(2) + '× (' + growthBit + ') × youth ' + youthOf(lead).toFixed(2) +
+      ' (' + ageExact(lead) + ')' + secondBit + tieBit + spikeBit + '.';
+  }
+  function densitySentence(list, filtered) {
+    var scopeBit = filtered ? ' among the matching rows' : '';
+    var dTop = topTwo(list, 'density');
+    var dLead = dTop.lead, dSecond = dTop.second;
+    var dText = 'Value-density leader ' + dLead.name + ' converts TVL at ' + dLead.density.toFixed(3) +
+      '× — ' + money(dLead.implied_value_usd) + ' implied on ' + money(dLead.tvl_usd) + ' TVL, ' +
+      dLead.multiple.toFixed(3) + '× ' + (dLead.category || 'no category') + ' multiple × ' +
+      dLead.momentum.toFixed(2) + '× momentum × ' + dLead.seasoning.toFixed(2) + '× seasoning × ' +
+      dLead.breadth.toFixed(2) + '× breadth × ' + dLead.credibility.toFixed(2) + ' credibility';
+    if (dSecond) {
+      var dWhy = whyParts(dLead, dSecond);
+      dText += ' — ahead of ' + dSecond.name + ' (' + dSecond.density.toFixed(3) + '×)' + scopeBit +
+        ', on ' + dWhy.multBit +
+        (dWhy.leadsText ? ', leading on ' + dWhy.leadsText : '') +
+        (dWhy.trailsText ? ', enough to outweigh weaker ' + dWhy.trailsText : '') +
+        (dWhy.tvlBit ? ', on ' + dWhy.tvlBit : '');
+    } else {
+      dText += filtered ? ' — the only matching row' : ' — the only row on the board';
+    }
+    if (dLead.rank > 10) dText += ', while ranking only #' + dLead.rank + ' by implied value';
+    return dText + '.';
+  }
+  function impliedSentence(list, filtered) {
+    var scopeBit = filtered ? ' among the matching rows' : '';
+    var iTop = topTwo(list, 'implied');
+    var iLead = iTop.lead, iSecond = iTop.second;
+    var iText = 'Implied-value leader ' + iLead.name + ' is worth ' + money(iLead.implied_value_usd) +
+      ' — TVL ' + money(iLead.tvl_usd) + ' at a ' + iLead.multiple.toFixed(3) + '× ' +
+      (iLead.category || 'no category') + ' multiple, momentum ' + iLead.momentum.toFixed(2) +
+      '×, seasoning ' + iLead.seasoning.toFixed(2) + '×, breadth ' + iLead.breadth.toFixed(2) +
+      '×, credibility ' + iLead.credibility.toFixed(2);
+    if (iSecond) {
+      var iWhy = whyParts(iLead, iSecond);
+      var onBits = [iWhy.tvlBit, iWhy.multBit].filter(function (x) { return x !== ''; }).join(' and ');
+      iText += ' — ahead of ' + iSecond.name + ' (' + money(iSecond.implied_value_usd) + ')' + scopeBit +
+        ', on ' + onBits +
+        (iWhy.leadsText ? ', leading on ' + iWhy.leadsText : '') +
+        (iWhy.trailsText ? ', enough to outweigh weaker ' + iWhy.trailsText : '');
+    } else {
+      iText += filtered ? ' — the only matching row' : ' — the only row on the board';
+    }
+    return iText + '.';
+  }
+  function lensSentence(list, lens, filtered) {
+    if (lens === 'early') return earlySentence(list, filtered);
+    if (lens === 'density') return densitySentence(list, filtered);
+    return impliedSentence(list, filtered);
+  }
+
+  // Detail lens read (v6): where this row stands under the current lens,
+  // against the lens leader over the whole board (not the filtered view —
+  // the detail is about the row, and the board-top sentence already
+  // covers the filtered case). The leader gets the board-top sentence
+  // itself; any other row gets its rank, its metric, and the same
+  // why-parts comparison, from its own side.
+  function detailLensRead(row) {
+    var lens = lensEl.value;
+    var sorted = R.rows.slice().sort(function (a, b) { return metricOf(b, lens) - metricOf(a, lens); });
+    var pos = sorted.indexOf(row) + 1;
+    var leader = sorted[0];
+    if (pos === 1) return lensSentence(R.rows, lens, false);
+    if (lens === 'early') {
+      return 'Early-movers read: early score ' + row.early_score.toFixed(2) +
+        ' = momentum ' + row.momentum.toFixed(2) + '× × youth ' + youthOf(row).toFixed(2) +
+        ' (' + ageExact(row) + '), ranking #' + pos + ' of ' + R.rows.length +
+        ' — behind leader ' + leader.name + ' (' + leader.early_score.toFixed(2) + '), ' +
+        cmpFactor('momentum', row.momentum, leader.momentum, function (v) { return v.toFixed(2) + '×'; }) +
+        ', ' + cmpFactor('youth', youthOf(row), youthOf(leader), function (v) { return v.toFixed(2); }) + '.';
+    }
+    var label = lens === 'density' ? 'Value-density' : 'Implied-value';
+    var metricName = lens === 'density' ? 'value density' : 'implied value';
+    var metric = lens === 'density' ? row.density.toFixed(3) + '×' : money(row.implied_value_usd);
+    var leadMetric = lens === 'density' ? leader.density.toFixed(3) + '×' : money(leader.implied_value_usd);
+    var w = whyParts(row, leader);
+    var onBits = [w.multBit, w.tvlBit].filter(function (x) { return x !== ''; }).join(' and ');
+    var text = label + ' read: ranks #' + pos + ' of ' + R.rows.length + ' by ' + metricName +
+      ' (' + metric + '), behind leader ' + leader.name + ' (' + leadMetric + ')' +
+      (onBits ? ', on ' + onBits : '') +
+      (w.leadsText ? ', leading on ' + w.leadsText : '') +
+      (w.trailsText ? ', trailing on ' + w.trailsText : '');
+    if (lens === 'density') text += ', while ranking #' + row.rank + ' by implied value';
+    return text + '.';
+  }
+
   function render() {
     var state = currentRows();
     var lens = state.lens;
@@ -344,98 +463,13 @@
     });
     var filtered = qEl.value.trim() !== '' || catSel.value !== '' ||
       Number(minTvlEl.value) > 0 || watchEl.checked;
-    var scopeBit = filtered ? ' among the matching rows' : '';
     lensLeadEl.className = 'lens-lead ' + lens;
     if (state.list.length === 0) {
       lensLeadEl.hidden = true;
       lensLeadEl.textContent = '';
-    } else if (lens === 'early') {
-      // Early-movers leader, in one sentence at the top of the board (v4):
-      // the score's arithmetic, why it leads, and the spike caveat when the
-      // leader's jump was capped. All figures come from the row itself, so
-      // the sentence stays true under any filter.
-      var lead = state.list[0];
-      var youthOf = function (r) { return 1.5 - Math.min(r.age_days === null || r.age_days === undefined ? 365 : r.age_days, 1095) / 1095; };
-      // Exact days, not the table's rounded "2mo": the reader should be
-      // able to check youth = 1.5 − days/1095 from the sentence itself.
-      var ageExact = function (r) {
-        return (r.age_days === null || r.age_days === undefined)
-          ? 'unknown age' : r.age_days + (r.age_days === 1 ? ' day' : ' days') + ' old';
-      };
-      var growthBit = (lead.change_7d === null || lead.change_7d === undefined)
-        ? '7-day change unreported'
-        : '7-day TVL ' + (lead.change_7d > 0 ? '+' : '') + lead.change_7d.toFixed(1) + '%' +
-          (lead.change_7d >= 60 ? ', capped at +60%' : '');
-      var secondBit = '';
-      var tieBit = ' — the highest momentum × youth combination ' +
-        (filtered ? 'among the matching rows' : 'on the board');
-      if (state.list.length > 1) {
-        var second = state.list[1];
-        secondBit = ', ahead of ' + second.name + ' (' + second.early_score.toFixed(2) +
-          ', ' + ageExact(second) + ')';
-        // The usual reason a leader leads: same capped momentum as the
-        // runner-up, so youth decides it. Say so only when it is true.
-        if (Math.abs(second.momentum - lead.momentum) < 0.001) {
-          tieBit = ' — tied on momentum ' + lead.momentum.toFixed(2) + '×, it leads on youth (' +
-            youthOf(lead).toFixed(2) + ' vs ' + youthOf(second).toFixed(2) + ')';
-        }
-      }
-      var spikeBit = (lead.change_7d !== null && lead.change_7d !== undefined && lead.change_7d >= 60)
-        ? ', and the spike stays unverified until its Week 0 check'
-        : '';
-      lensLeadEl.hidden = false;
-      lensLeadEl.textContent = 'Early-movers leader ' + lead.name + ' scores ' + lead.early_score.toFixed(2) +
-        ' = momentum ' + lead.momentum.toFixed(2) + '× (' + growthBit + ') × youth ' + youthOf(lead).toFixed(2) +
-        ' (' + ageExact(lead) + ')' + secondBit + tieBit + spikeBit + '.';
-    } else if (lens === 'density') {
-      // Value-density leader (v5), same shape as the early sentence: the
-      // density's arithmetic, why it leads, and where it sits by implied
-      // value — the lens is about efficiency, not size, so a leader ranked
-      // #57 by implied value is the point, not a surprise.
-      var dTop = topTwo(state.list, 'density');
-      var dLead = dTop.lead, dSecond = dTop.second;
-      var dText = 'Value-density leader ' + dLead.name + ' converts TVL at ' + dLead.density.toFixed(3) +
-        '× — ' + money(dLead.implied_value_usd) + ' implied on ' + money(dLead.tvl_usd) + ' TVL, ' +
-        dLead.multiple.toFixed(3) + '× ' + (dLead.category || 'no category') + ' multiple × ' +
-        dLead.momentum.toFixed(2) + '× momentum × ' + dLead.seasoning.toFixed(2) + '× seasoning × ' +
-        dLead.breadth.toFixed(2) + '× breadth × ' + dLead.credibility.toFixed(2) + ' credibility';
-      if (dSecond) {
-        var dWhy = whyParts(dLead, dSecond);
-        dText += ' — ahead of ' + dSecond.name + ' (' + dSecond.density.toFixed(3) + '×)' + scopeBit +
-          ', on ' + dWhy.multBit +
-          (dWhy.leadsText ? ', leading on ' + dWhy.leadsText : '') +
-          (dWhy.trailsText ? ', enough to outweigh weaker ' + dWhy.trailsText : '') +
-          (dWhy.tvlBit ? ', on ' + dWhy.tvlBit : '');
-      } else {
-        dText += filtered ? ' — the only matching row' : ' — the only row on the board';
-      }
-      if (dLead.rank > 10) dText += ', while ranking only #' + dLead.rank + ' by implied value';
-      lensLeadEl.hidden = false;
-      lensLeadEl.textContent = dText + '.';
     } else {
-      // Implied-value leader (v5): the factor arithmetic, then why it
-      // leads the runner-up. The factor displays are rounded (as in the
-      // detail view), so the sentence lists them with commas, not with
-      // an equals sign.
-      var iTop = topTwo(state.list, 'implied');
-      var iLead = iTop.lead, iSecond = iTop.second;
-      var iText = 'Implied-value leader ' + iLead.name + ' is worth ' + money(iLead.implied_value_usd) +
-        ' — TVL ' + money(iLead.tvl_usd) + ' at a ' + iLead.multiple.toFixed(3) + '× ' +
-        (iLead.category || 'no category') + ' multiple, momentum ' + iLead.momentum.toFixed(2) +
-        '×, seasoning ' + iLead.seasoning.toFixed(2) + '×, breadth ' + iLead.breadth.toFixed(2) +
-        '×, credibility ' + iLead.credibility.toFixed(2);
-      if (iSecond) {
-        var iWhy = whyParts(iLead, iSecond);
-        var onBits = [iWhy.tvlBit, iWhy.multBit].filter(function (x) { return x !== ''; }).join(' and ');
-        iText += ' — ahead of ' + iSecond.name + ' (' + money(iSecond.implied_value_usd) + ')' + scopeBit +
-          ', on ' + onBits +
-          (iWhy.leadsText ? ', leading on ' + iWhy.leadsText : '') +
-          (iWhy.trailsText ? ', enough to outweigh weaker ' + iWhy.trailsText : '');
-      } else {
-        iText += filtered ? ' — the only matching row' : ' — the only row on the board';
-      }
       lensLeadEl.hidden = false;
-      lensLeadEl.textContent = iText + '.';
+      lensLeadEl.textContent = lensSentence(state.list, lens, filtered);
     }
     var shown = state.list.slice(0, shownCount);
     var maxImplied = top.implied_value_usd;
@@ -448,7 +482,7 @@
           : '<span class="bar" style="width:' + share + 'px"></span> ' + (share) + '%';
       return '<tr data-slug="' + esc(r.slug) + '">' +
         '<td>' + r.rank + '</td>' +
-        '<td class="name">' + esc(r.name) + (onWatchlist(r) ? '<span class="badge">WATCHLIST</span>' : '') + '</td>' +
+        '<td class="name">' + esc(r.name) + (onWatchlist(r) ? '<span class="badge">WATCHLIST</span>' : '') + '<span class="subcat">' + esc(r.category || '—') + '</span></td>' +
         '<td>' + esc(r.category || '—') + '</td>' +
         '<td>' + r.chains.length + '</td>' +
         '<td class="num">' + money(r.tvl_usd) + '</td>' +
@@ -464,9 +498,11 @@
         : ' · Implied-value lens.') +
       ' * = 7-day change winsorised for the model.';
     moreEl.textContent = state.total > shownCount
-      ? 'Showing the first ' + shownCount + ' — use Show more, or narrow the filters.'
+      ? 'Showing the first ' + shownCount + ' — use Show more, Show all ' + state.total + ', or narrow the filters.'
       : '';
     showMoreEl.hidden = state.total <= shownCount;
+    showAllEl.hidden = state.total <= shownCount;
+    showAllEl.textContent = 'Show all ' + state.total;
     rowsEl.querySelectorAll('tr').forEach(function (tr) {
       tr.addEventListener('click', function () { showDetail(tr.getAttribute('data-slug')); });
     });
@@ -474,12 +510,19 @@
 
   var shownCount = SHOW;
   var showMoreEl = document.getElementById('showMore');
+  var showAllEl = document.getElementById('showAll');
   [qEl, catSel, minTvlEl, watchEl, lensEl, sortEl].forEach(function (el) {
     el.addEventListener('input', function () { shownCount = SHOW; render(); });
     el.addEventListener('change', function () { shownCount = SHOW; render(); });
   });
   showMoreEl.addEventListener('click', function () {
     shownCount += SHOW;
+    render();
+  });
+  // Show all (v6): one click loads every matching row — 198 with no
+  // filter on — instead of paging +60 at a time.
+  showAllEl.addEventListener('click', function () {
+    shownCount = currentRows().total;
     render();
   });
 
