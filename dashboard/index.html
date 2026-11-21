@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar B — pre-token protocols, ranked by implied launch value</title>
+<link rel="stylesheet" href="app.css">
+<script src="../data.js"></script>
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Token Radar · Route B — a second look at the same snapshot</p>
+  <h1>Which pre-token protocol is worth farming next?</h1>
+  <p class="lede">Every protocol below <strong>records no token</strong> in the snapshot — that is the
+  record, not proof it has none. Each is ranked by what its launch would be worth if its record
+  stayed as it is, with the five steps to farm it. Implied values are this board's own claim,
+  never a prediction that a token will launch, or when.</p>
+  <dl class="stats" id="stats"></dl>
+</header>
+
+<main>
+  <details class="method" id="method">
+    <summary>How the value is worked out — the whole model, in the open</summary>
+    <p><code>implied = TVL × category multiple × momentum × seasoning × breadth × credibility</code></p>
+    <ul>
+      <li><strong>Category multiple.</strong> The median market-cap / TVL of the token-having protocols in the
+      same category, shrunk toward the snapshot's global median when a category has few peers, then clamped
+      to 0.05–0.80. No name is ever hard-coded: the multiples come from this snapshot's own figures.</li>
+      <li><strong>Momentum.</strong> 1 + 0.4 × the 7-day TVL change, winsorised to −40%…+60%. A spike above
+      +60% is capped and flagged — check it is not mercenary capital before you trust it.</li>
+      <li><strong>Seasoning.</strong> 0.75 + 0.25 × age / 3 years. Older protocols with no token yet have
+      survived longer without one; unknown age takes the 0.75 floor.</li>
+      <li><strong>Breadth.</strong> +2% per extra chain, at most +8%.</li>
+      <li><strong>Credibility.</strong> Starts at 1.00 and loses 0.03 for a missing 7-day change, 0.03 for a
+      missing listing date, 0.02 for TVL under $10M, 0.02 for a single chain (floor 0.90). Thin or
+      incomplete records are penalised, never rewarded — and nobody is dropped from the board for them.</li>
+    </ul>
+    <p>Two lenses: <strong>Implied value</strong> ranks by the model above; <strong>Early movers</strong>
+    ranks by momentum × youth, the protocols moving fastest while still young. The board covers all 40
+    watchlist protocols plus 158 more below the $50M floor.</p>
+    <div id="multiples"></div>
+  </details>
+
+  <section class="controls" aria-label="Filter and sort">
+    <label>Search <input id="q" type="search" placeholder="protocol name or slug…" autocomplete="off"></label>
+    <label>Category <select id="cat"><option value="">All categories</option></select></label>
+    <label>Min TVL <select id="minTvl">
+      <option value="0" selected>Any TVL</option>
+      <option value="10000000">$10M+</option>
+      <option value="50000000">$50M+</option>
+      <option value="100000000">$100M+</option>
+      <option value="1000000000">$1B+</option>
+    </select></label>
+    <label class="check"><input id="watchOnly" type="checkbox"> Watchlist only</label>
+    <label>Lens <select id="lens">
+      <option value="implied">Implied value</option>
+      <option value="early">Early movers</option>
+    </select></label>
+    <label>Sort <select id="sort">
+      <option value="implied">Implied value ↓</option>
+      <option value="tvl">TVL ↓</option>
+      <option value="growth">7-day change ↓</option>
+      <option value="age">Age ↓</option>
+    </select></label>
+  </section>
+
+  <p class="count" id="count"></p>
+
+  <section class="detail" id="detail" hidden></section>
+
+  <table class="board">
+    <thead><tr>
+      <th>#</th><th>Protocol</th><th>Category</th><th>Chains</th>
+      <th class="num">TVL</th><th class="num">7d</th><th class="num">Age</th>
+      <th class="num">Implied value</th><th class="num" id="lensHead">Share</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <p class="more" id="more"></p>
+</main>
+
+<footer>
+  <p>Snapshot: DefiLlama protocol data fetched 2026-11-14, 758 protocols at or above $5M TVL, floor $50M.
+  “Records no token” means the snapshot carries no gecko_id, symbol or market cap for it. A protocol on
+  this board may still have a token its record does not carry. Farm steps are this board's plan, not
+  financial advice; never risk money you cannot afford to lose.</p>
+  <p>Judge's note: this entry is Route B. Its model is category-relative multiples with shrinkage, not a
+  flat TVL multiple; its farm plans run on a weekly cadence with a stated cost and time per step; and its
+  credibility factor docks thin records instead of trusting them. Every factor above is computed from the
+  snapshot at run time — see <code>lib/model.ts</code>, functions <code>categoryMultiples</code>,
+  <code>scoreProtocol</code> and <code>farmPlan</code>.</p>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
