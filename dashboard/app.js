@@ -50,6 +50,17 @@
     '<table class="mult-table"><thead><tr><th>Category</th><th>Peers</th><th>Multiple</th></tr></thead><tbody>' +
     cells + '</tbody></table>';
 
+  var catSummary = document.getElementById('catSummary');
+  var sumCells = R.category_summary.map(function (c) {
+    return '<tr><td>' + esc(c.category) + '</td><td class="num">' + c.rows + '</td>' +
+      '<td class="num">' + money(c.total_implied_usd) + '</td><td class="num">' + c.multiple.toFixed(3) + '×</td>' +
+      '<td class="num">' + (c.share * 100).toFixed(1) + '%</td></tr>';
+  }).join('');
+  catSummary.innerHTML = '<h2>Where the implied value sits</h2>' +
+    '<p>Top 10 categories by total implied value on this board — the multiple shown is the one the model actually used for that category.</p>' +
+    '<table class="mult-table"><thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Total implied</th><th class="num">Multiple</th><th class="num">Share</th></tr></thead><tbody>' +
+    sumCells + '</tbody></table>';
+
   var catSel = document.getElementById('cat');
   var cats = Array.from(new Set(R.rows.map(function (r) { return r.category || '(no category)'; }))).sort();
   cats.forEach(function (c) {
@@ -71,7 +82,8 @@
   var lensHead = document.getElementById('lensHead');
 
   if (params.get('watch') === '1') watchEl.checked = true;
-  if (params.get('lens') === 'early') lensEl.value = 'early';
+  var lensParam = params.get('lens');
+  if (lensParam === 'early' || lensParam === 'density') lensEl.value = lensParam;
 
   var FLAG_TEXT = {
     'tvl-falling': 'TVL falling 20%+ in 7 days',
@@ -103,6 +115,8 @@
     var sorted = list.slice();
     if (lens === 'early') {
       sorted.sort(function (a, b) { return b.early_score - a.early_score || b.implied_value_usd - a.implied_value_usd; });
+    } else if (lens === 'density') {
+      sorted.sort(function (a, b) { return b.density - a.density || b.implied_value_usd - a.implied_value_usd; });
     } else if (sort === 'tvl') {
       sorted.sort(function (a, b) { return b.tvl_usd - a.tvl_usd; });
     } else if (sort === 'growth') {
@@ -129,6 +143,7 @@
     if (row.seasoning > 0.95) parts.push('it has run ' + ageLabel(row.age_days) + ' with no token');
     if (row.breadth > 1.05) parts.push('it spans ' + row.chains.length + ' chains');
     if (row.credibility < 1) parts.push('thin records dock its credibility to ' + row.credibility.toFixed(2));
+    if (row.density >= 0.5) parts.push('its TVL converts at ' + row.density.toFixed(3) + '×, among the densest on the board');
     return 'Rank #' + row.rank + ' because ' + parts.join(', ') + ' — implied ' + money(row.implied_value_usd) + '.';
   }
 
@@ -152,6 +167,10 @@
       '<p class="sub">' + esc(row.category || 'No category') + ' · ' + esc(row.chains.join(', ')) +
       ' · TVL ' + money(row.tvl_usd) + ' · snapshot ' + esc(R.as_of) + '</p>' +
       '<p class="why">' + esc(whySentence(row)) + '</p>' +
+      '<p class="compare">#' + row.category_rank + ' in ' + esc(row.category || 'no category') + ' · ' +
+      (row.category_implied_share * 100).toFixed(1) + '% of its category\u2019s implied value · ' +
+      row.peers + ' token-having peer' + (row.peers === 1 ? '' : 's') + ' set the ' + row.multiple.toFixed(3) +
+      '× multiple · value density ' + row.density.toFixed(3) + '×.</p>' +
       '<div class="factors">' +
       factorBar('Category multiple', row.multiple, 0.8, row.multiple.toFixed(3) + '×') +
       factorBar('Momentum', row.momentum, 1.24, row.momentum.toFixed(2) + '×') +
@@ -172,14 +191,16 @@
   function render() {
     var state = currentRows();
     var lens = state.lens;
-    lensHead.textContent = lens === 'early' ? 'Early score' : 'Share';
-    var shown = state.list.slice(0, SHOW);
+    lensHead.textContent = lens === 'early' ? 'Early score' : lens === 'density' ? 'Density' : 'Share';
+    var shown = state.list.slice(0, shownCount);
     var maxImplied = top.implied_value_usd;
     rowsEl.innerHTML = shown.map(function (r) {
       var share = Math.max(2, Math.round((r.implied_value_usd / maxImplied) * 100));
       var right = lens === 'early'
         ? r.early_score.toFixed(2)
-        : '<span class="bar" style="width:' + share + 'px"></span> ' + (share) + '%';
+        : lens === 'density'
+          ? r.density.toFixed(3) + '×'
+          : '<span class="bar" style="width:' + share + 'px"></span> ' + (share) + '%';
       return '<tr data-slug="' + esc(r.slug) + '">' +
         '<td>' + r.rank + '</td>' +
         '<td class="name">' + esc(r.name) + (onWatchlist(r) ? '<span class="badge">WATCHLIST</span>' : '') + '</td>' +
@@ -193,19 +214,28 @@
     }).join('');
     countEl.textContent = 'Showing ' + shown.length + ' of ' + state.total + ' matching protocols' +
       (state.total < R.row_count ? ' (' + R.row_count + ' on the board)' : ' — the full board') +
-      (lens === 'early' ? ' · Early-movers lens: momentum × youth.' : ' · Implied-value lens.') +
+      (lens === 'early' ? ' · Early-movers lens: momentum × youth.'
+        : lens === 'density' ? ' · Value-density lens: implied value per dollar of TVL.'
+        : ' · Implied-value lens.') +
       ' * = 7-day change winsorised for the model.';
-    moreEl.textContent = state.total > SHOW
-      ? 'Showing the first ' + SHOW + ' — narrow the filters to see the rest.'
+    moreEl.textContent = state.total > shownCount
+      ? 'Showing the first ' + shownCount + ' — use Show more, or narrow the filters.'
       : '';
+    showMoreEl.hidden = state.total <= shownCount;
     rowsEl.querySelectorAll('tr').forEach(function (tr) {
       tr.addEventListener('click', function () { showDetail(tr.getAttribute('data-slug')); });
     });
   }
 
+  var shownCount = SHOW;
+  var showMoreEl = document.getElementById('showMore');
   [qEl, catSel, minTvlEl, watchEl, lensEl, sortEl].forEach(function (el) {
-    el.addEventListener('input', render);
-    el.addEventListener('change', render);
+    el.addEventListener('input', function () { shownCount = SHOW; render(); });
+    el.addEventListener('change', function () { shownCount = SHOW; render(); });
+  });
+  showMoreEl.addEventListener('click', function () {
+    shownCount += SHOW;
+    render();
   });
 
   render();

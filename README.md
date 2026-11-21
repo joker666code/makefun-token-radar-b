@@ -37,10 +37,29 @@ cost in dollars and its time. No step assumes an airdrop or points exist.
 
 ## Dashboard
 
-Light paper theme. Two lenses: **Implied value** and **Early movers**
-(momentum × youth). Search, category, minimum TVL, watchlist-only, sort,
-and a detail view per protocol with factor bars, a why-this-rank sentence
+Light paper theme. Three lenses: **Implied value**, **Early movers**
+(momentum × youth) and **Value density** (implied value per dollar of
+TVL). Search, category, minimum TVL, watchlist-only, sort, a top-10
+category summary, a Show more control (60 rows at a time), and a detail
+view per protocol with factor bars, a why-this-rank sentence, its rank
+and share inside its own category, the peer count behind its multiple,
 and risk flags.
+
+## v2 (2026-11-21)
+
+Board depth, no model change — the ranking and the $4.99B total are
+identical to v1:
+
+- Each row now carries `category_rank`, `category_implied_share`,
+  `peers` (token-having peers behind its multiple) and `density`
+  (implied / TVL, the five factors folded into one number).
+- `data.js` carries `category_summary`: the top 10 categories by total
+  implied value, with row counts, the multiple used and the share.
+- Third lens, **Value density**, surfaces small protocols whose TVL
+  converts efficiently; its board is led by the highest-density rows,
+  not by TVL.
+- Show more loads the next 60 rows instead of capping the board at 60.
+- Fourth screenshot (`4-density.png`) captures the new lens.
 
 ## Run it
 

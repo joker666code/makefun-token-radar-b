@@ -29,6 +29,11 @@
 // dollars and how long it takes, and no step assumes an airdrop, points
 // or any incentive exists: where incentives are checked, the step says to
 // record what the page actually shows, including nothing.
+//
+// v2 adds board depth without touching the model: each row carries its
+// rank and share inside its own category, the peer count behind its
+// multiple, and its density (implied / TVL); the dashboard data carries
+// a top-10 category summary by total implied value.
 
 export interface SnapshotProtocol {
   slug: string;
@@ -75,6 +80,12 @@ export interface BoardRow {
   breadth: number;
   credibility: number;
   early_score: number;
+  // v2: where the row sits inside its own category, and how efficiently its
+  // TVL converts to implied value. All derived from the snapshot at run time.
+  category_rank: number;
+  category_implied_share: number;
+  peers: number;
+  density: number;
   flags: string[];
   farm_steps: string[];
 }
@@ -83,6 +94,14 @@ export interface CategoryMultiple {
   category: string;
   peers: number;
   multiple: number;
+}
+
+export interface CategorySummary {
+  category: string;
+  rows: number;
+  total_implied_usd: number;
+  multiple: number;
+  share: number;
 }
 
 export interface RadarData {
@@ -96,6 +115,7 @@ export interface RadarData {
   global_median: number;
   total_implied_usd: number;
   category_multiples: CategoryMultiple[];
+  category_summary: CategorySummary[];
   rows: BoardRow[];
 }
 
@@ -363,6 +383,10 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
       breadth: Math.round(scoredOne.factors.breadth * 10000) / 10000,
       credibility: Math.round(scoredOne.factors.credibility * 10000) / 10000,
       early_score: scoredOne.earlyScore,
+      category_rank: 0,
+      category_implied_share: 0,
+      peers: 0,
+      density: 0,
       flags: scoredOne.flags,
       farm_steps: farmPlan(p, age),
     };
@@ -376,6 +400,39 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     row.rank = index + 1;
   });
   const totalImplied = scored.reduce((sum, row) => sum + row.implied_value_usd, 0);
+  // v2: category context, computed after the global sort so category_rank
+  // follows the same implied-value order. density is the effective multiple
+  // (implied / TVL): the model's five factors folded into one number, so a
+  // small protocol that converts TVL efficiently can be found without
+  // re-running the model.
+  const peerCount = new Map(table.map((t) => [t.category, t.peers]));
+  const catTotals = new Map<string, number>();
+  const catCounts = new Map<string, number>();
+  for (const row of scored) {
+    const key = row.category ?? '(no category)';
+    catTotals.set(key, (catTotals.get(key) ?? 0) + row.implied_value_usd);
+    catCounts.set(key, (catCounts.get(key) ?? 0) + 1);
+  }
+  const catSeen = new Map<string, number>();
+  for (const row of scored) {
+    const key = row.category ?? '(no category)';
+    const n = (catSeen.get(key) ?? 0) + 1;
+    catSeen.set(key, n);
+    row.category_rank = n;
+    row.category_implied_share = Math.round((row.implied_value_usd / catTotals.get(key)!) * 10000) / 10000;
+    row.peers = peerCount.get(key) ?? 0;
+    row.density = Math.round((row.implied_value_usd / row.tvl_usd) * 10000) / 10000;
+  }
+  const categorySummary: CategorySummary[] = [...catTotals.entries()]
+    .map(([category, total]) => ({
+      category,
+      rows: catCounts.get(category)!,
+      total_implied_usd: total,
+      multiple: Math.round((byCategory.get(category) ?? clamp(globalMedian, MULTIPLE_LOW, MULTIPLE_HIGH)) * 10000) / 10000,
+      share: Math.round((total / totalImplied) * 10000) / 10000,
+    }))
+    .sort((a, b) => b.total_implied_usd - a.total_implied_usd || a.category.localeCompare(b.category))
+    .slice(0, 10);
   const radar: RadarData = {
     as_of: snapshot.as_of,
     source: snapshot.source,
@@ -387,6 +444,7 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     global_median: Math.round(globalMedian * 10000) / 10000,
     total_implied_usd: totalImplied,
     category_multiples: table,
+    category_summary: categorySummary,
     rows: scored,
   };
   return { board: scored, radar };

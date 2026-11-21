@@ -35,11 +35,14 @@
       missing listing date, 0.02 for TVL under $10M, 0.02 for a single chain (floor 0.90). Thin or
       incomplete records are penalised, never rewarded — and nobody is dropped from the board for them.</li>
     </ul>
-    <p>Two lenses: <strong>Implied value</strong> ranks by the model above; <strong>Early movers</strong>
-    ranks by momentum × youth, the protocols moving fastest while still young. The board covers all 40
+    <p>Three lenses: <strong>Implied value</strong> ranks by the model above; <strong>Early movers</strong>
+    ranks by momentum × youth, the protocols moving fastest while still young; <strong>Value density</strong>
+    ranks by implied value per dollar of TVL, the protocols whose TVL converts most efficiently. The board covers all 40
     watchlist protocols plus 158 more below the $50M floor.</p>
     <div id="multiples"></div>
   </details>
+
+  <section class="catsum" id="catSummary" aria-label="Where the implied value sits"></section>
 
   <section class="controls" aria-label="Filter and sort">
     <label>Search <input id="q" type="search" placeholder="protocol name or slug…" autocomplete="off"></label>
@@ -55,6 +58,7 @@
     <label>Lens <select id="lens">
       <option value="implied">Implied value</option>
       <option value="early">Early movers</option>
+      <option value="density">Value density</option>
     </select></label>
     <label>Sort <select id="sort">
       <option value="implied">Implied value ↓</option>
@@ -78,6 +82,7 @@
   </table>
 
   <p class="more" id="more"></p>
+  <div class="more"><button id="showMore" type="button">Show more</button></div>
 </main>
 
 <footer>
@@ -89,7 +94,9 @@
   flat TVL multiple; its farm plans run on a weekly cadence with a stated cost and time per step; and its
   credibility factor docks thin records instead of trusting them. Every factor above is computed from the
   snapshot at run time — see <code>lib/model.ts</code>, functions <code>categoryMultiples</code>,
-  <code>scoreProtocol</code> and <code>farmPlan</code>.</p>
+  <code>scoreProtocol</code> and <code>farmPlan</code>. v2 adds per-row category rank, category share,
+  peer count and value density, a top-10 category summary, a third lens (value density) and a Show more
+  control; the model and the ranking are unchanged.</p>
 </footer>
 <script src="app.js"></script>
 </body>
