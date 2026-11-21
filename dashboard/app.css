@@ -124,6 +124,15 @@ h1 {
 .detail h2 { font-family: Georgia, serif; font-size: 24px; margin: 0 0 2px; }
 .detail .sub { color: var(--muted); margin: 0 0 12px; }
 .detail .why { font-size: 16px; margin: 0 0 14px; }
+.detail .warn {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  font-size: 14px;
+}
 .factors { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 0 0 14px; }
 .factor { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .factor b { display: block; font-size: 18px; font-family: Georgia, serif; }

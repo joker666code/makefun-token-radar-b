@@ -31,9 +31,14 @@ rule (minus its $50M floor), including all 40 watchlist slugs.
 
 ## Farm plans
 
-Five steps on a weekly cadence — Week 1 probe, Week 2 scale, Weeks 3–4
-deepen, Ongoing weekly routine, Exit conditions. Every step states its
-cost in dollars and its time. No step assumes an airdrop or points exist.
+Six steps — a Week 0 verification, then five on a weekly cadence (Week 1 probe, Week 2 scale,
+Weeks 3–4 deepen, Ongoing weekly routine, Exit conditions). Week 0 costs $0: it verifies the
+snapshot's own claims about the protocol (TVL in the same ballpark, no token listed) plus one
+check the protocol's category makes possible — a lending market's borrow rate, a vault
+curator's strategy, an RWA vault's custodian attestation — and the sharpest warning the row's
+own flags raise (a capped spike first). If any check cannot be confirmed, the Week 1 probe is
+halved. Every step states its cost in dollars and its time. No step assumes an airdrop or
+points exist.
 
 ## Dashboard
 
@@ -60,6 +65,35 @@ identical to v1:
   not by TVL.
 - Show more loads the next 60 rows instead of capping the board at 60.
 - Fourth screenshot (`4-density.png`) captures the new lens.
+
+## v3 (2026-11-21)
+
+Same model, same ranking, same $4.99B total — the work is verification and
+explanation, not re-scoring:
+
+- **Farm plans grow a Week 0 step (6 steps now).** Before any money moves,
+  each plan verifies the record: the protocol's own page should show TVL in
+  the same ballpark and list no token, plus one check its category makes
+  possible (borrow rate for Lending, pool depth for Dexs, custodian
+  attestation for RWA, curator and strategy for Risk Curators, and so on
+  across all 33 categories on the board), plus the sharpest warning its own
+  flags raise — a capped 7-day spike first. An unconfirmed check halves the
+  Week 1 probe. This is a pre-flight check of the data, not lane4's
+  mid-plan health check, and it sits before the money, at $0.
+- **Early-movers lens gets its spike warning in the detail view.** A
+  spike-capped row now shows a plain-words box: the raw 7-day jump, the
+  +60% cap, momentum stopped at 1.24×, and that the early score is
+  momentum × youth, so the spike alone lifts its early rank — with the
+  Week 0 check named as the thing that settles it. With the early lens on,
+  the detail also shows the early-score arithmetic. The board's count line
+  carries the same caution.
+- **Two more "same score, more information" lines.** The category summary
+  calls out its concentration (Risk Curators alone holds 54.9% of the
+  board's implied value), and each detail shows the row's share of the
+  board's total implied value.
+- **Screenshot 2** now captures the early-movers leader Shift DeFi
+  (+4448.5% in 7 days, 45 days old) with the spike warning and the Week 0
+  step visible, instead of the #1 detail.
 
 ## Run it
 

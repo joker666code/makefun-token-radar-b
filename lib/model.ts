@@ -28,12 +28,24 @@
 // Weeks 3-4 deepen, Ongoing, Exit). Every step states what it costs in
 // dollars and how long it takes, and no step assumes an airdrop, points
 // or any incentive exists: where incentives are checked, the step says to
-// record what the page actually shows, including nothing.
+// record what the page actually shows, including nothing. A Week 0 step
+// comes first and costs $0: it verifies the snapshot's own claims about
+// the protocol (TVL in the same ballpark, no token listed) plus one
+// check the category makes possible and the sharpest warning the row's
+// own flags raise, so no money moves on an unverified record.
 //
 // v2 adds board depth without touching the model: each row carries its
 // rank and share inside its own category, the peer count behind its
 // multiple, and its density (implied / TVL); the dashboard data carries
 // a top-10 category summary by total implied value.
+//
+// v3 also leaves the model alone. It adds a Week 0 verification step to
+// every farm plan — a $0, category-specific check of the record before
+// any money moves, plus the sharpest warning the row's own flags raise
+// (a capped spike first) — and the dashboard's detail view now spells
+// out the spike check and the early-score arithmetic for the
+// early-movers lens. Same ranking, same $4.99B total, more information
+// per row.
 
 export interface SnapshotProtocol {
   slug: string;
@@ -342,7 +354,83 @@ function chainName(protocol: SnapshotProtocol): string {
   return protocol.chains[0] ?? 'its main chain';
 }
 
-/** Five weekly-cadence farm steps, each with a cost in dollars and a time. */
+/** The Week 0 check, by category: what to verify on the protocol's own
+ * pages before any money moves. A lending market's borrow rate is
+ * checkable in a way a vault curator's strategy is not, so the check
+ * follows the category; every category the snapshot carries is covered,
+ * and the default fits the long tail of one- and two-row categories. */
+function verifyCheck(category: string | null): string {
+  switch (category) {
+    case 'Lending':
+    case 'Uncollateralized Lending':
+      return 'check the borrow rate, the collateral list and that a withdrawal preview returns cleanly on its lending page';
+    case 'Dexs':
+      return 'check the largest pool\u2019s depth and that a small swap preview quotes without heavy slippage';
+    case 'Yield':
+    case 'Yield Aggregator':
+    case 'Farm':
+    case 'Leveraged Farming':
+      return 'check the vault\u2019s stated yield source, its fee page and the withdrawal delay it states';
+    case 'RWA':
+      return 'check the custodian or attestation page for the tokenised asset and the redemption terms it states';
+    case 'Derivatives':
+    case 'Perps':
+    case 'Basis Trading':
+    case 'Interest Rate Derivatives':
+      return 'check the funding rate, the liquidation rules and the fee schedule on its trading page';
+    case 'Risk Curators':
+    case 'Onchain Capital Allocator':
+      return 'check who curates the vault, the strategy it states and the fee it charges';
+    case 'CDP':
+    case 'CDP Manager':
+    case 'Collateral Markets':
+    case 'Stablecoin Wrapper':
+    case 'Dual-Token Stablecoin':
+    case 'Decentralized BTC':
+    case 'Anchor BTC':
+      return 'check the collateral ratio, the liquidation threshold and the redemption path it states';
+    case 'Prediction Market':
+      return 'check the market\u2019s resolution rules and who resolves it';
+    case 'Payments':
+    case 'Crypto Card Issuer':
+      return 'check the fee and settlement time it states for a payment';
+    case 'Chain':
+    case 'Cross Chain Bridge':
+      return 'check the bridge or chain explorer lists it and the transfer fee it states';
+    default:
+      return 'check its docs page states what the product does, how fees work and how withdrawals work';
+  }
+}
+
+/**
+ * The sharpest warning the row's own record raises, if it raises one.
+ * A capped spike first, then a falling TVL, then missing figures, then
+ * youth or a single chain. Only one note: the step has to stay readable
+ * and inside the gate's 600-character step cap.
+ */
+function verifyFlagNote(protocol: SnapshotProtocol, age: number | null): string {
+  if (protocol.change_7d !== null && protocol.change_7d >= GROWTH_HIGH) {
+    return ` Its 7-day TVL jumped +${protocol.change_7d.toFixed(1)}% — check whether one deposit or a new vault explains it, because a single inflow can reverse as fast as it arrived.`;
+  }
+  if (protocol.change_7d !== null && protocol.change_7d <= -20) {
+    return ` Its TVL fell ${Math.abs(protocol.change_7d).toFixed(1)}% in 7 days — check whether the fall is still going before probing.`;
+  }
+  if (protocol.change_7d === null) {
+    return ' Its 7-day change is unreported, so there is no growth figure to confirm.';
+  }
+  if (age === null) {
+    return ' Its listing date is unknown, so its age cannot be confirmed.';
+  }
+  if (age < 180) {
+    return ' It listed under 6 months ago, so confirm the launch date on its own page.';
+  }
+  if (protocol.chains.length <= 1) {
+    return ' It runs on one chain only, so confirm that chain\u2019s explorer lists it.';
+  }
+  return '';
+}
+
+/** Six farm steps: a Week 0 verification, then five weekly-cadence steps, each with a cost in dollars and a time. */
 export function farmPlan(protocol: SnapshotProtocol, age: number | null): string[] {
   const probe = probeDollars(protocol, age);
   const total = probe * 2;
@@ -350,7 +438,12 @@ export function farmPlan(protocol: SnapshotProtocol, age: number | null): string
   const chain = chainName(protocol);
   const young = age !== null && age < 180;
   const hold = young ? '30 days' : '45 days';
+  const verify =
+    `Week 0, verify the record (15 minutes, $0 at risk): before spending anything, ${verifyCheck(protocol.category)}. ` +
+    `Confirm its own page shows TVL in the same ballpark as ${money(protocol.tvl_usd)} and lists no token.` +
+    `${verifyFlagNote(protocol, age)} Write down what each check shows; if any check cannot be confirmed, halve the Week 1 probe.`;
   return [
+    verify,
     `Week 1, probe (30 minutes to set up, then 7 days): use ${money(probe)} to ${action} on ${chain}. Save the transaction hash, check the next day that your balance reads above $0, and note the fee you paid.`,
     `Week 2, scale (20 minutes, then 7 days): if the probe balance is above $0 and a withdrawal preview returns cleanly, add another ${money(probe)} so ${money(total)} is at risk in total. If either check fails, stop here and withdraw.`,
     `Weeks 3-4, deepen (30 minutes, then 14 days): repeat the core action a second time through a different pool or vault on the same protocol, still with no more than ${money(total)} at risk. Open the protocol's incentives page if it has one and write down exactly what it shows, including when it shows nothing: do not assume points or an airdrop exist.`,

@@ -56,10 +56,14 @@
       '<td class="num">' + money(c.total_implied_usd) + '</td><td class="num">' + c.multiple.toFixed(3) + '×</td>' +
       '<td class="num">' + (c.share * 100).toFixed(1) + '%</td></tr>';
   }).join('');
+  var topCat = R.category_summary[0];
   catSummary.innerHTML = '<h2>Where the implied value sits</h2>' +
     '<p>Top 10 categories by total implied value on this board — the multiple shown is the one the model actually used for that category.</p>' +
     '<table class="mult-table"><thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Total implied</th><th class="num">Multiple</th><th class="num">Share</th></tr></thead><tbody>' +
-    sumCells + '</tbody></table>';
+    sumCells + '</tbody></table>' +
+    '<p><strong>Concentration:</strong> ' + esc(topCat.category) + ' alone holds ' +
+    (topCat.share * 100).toFixed(1) + '% of the board\u2019s implied value across ' + topCat.rows +
+    ' rows — the value is concentrated, not spread. A category this heavy moves the whole board.</p>';
 
   var catSel = document.getElementById('cat');
   var cats = Array.from(new Set(R.rows.map(function (r) { return r.category || '(no category)'; }))).sort();
@@ -157,9 +161,30 @@
       return '<li>' + esc(FLAG_TEXT[f] || f) + '</li>';
     }).join('');
     var steps = row.farm_steps.map(function (s, idx) {
-      var tag = ['WEEK 1', 'WEEK 2', 'WEEKS 3–4', 'ONGOING', 'EXIT'][idx] || ('STEP ' + (idx + 1));
+      var tag = ['VERIFY', 'WEEK 1', 'WEEK 2', 'WEEKS 3–4', 'ONGOING', 'EXIT'][idx] || ('STEP ' + (idx + 1));
       return '<li><span class="tag">' + tag + '</span>' + esc(s) + '</li>';
     }).join('');
+    // Spike check (v3): a capped 7-day spike lifts both the implied value
+    // (momentum stops at 1.24x) and the early-mover score (momentum x
+    // youth), so the detail says so in plain words instead of leaving the
+    // flag to speak for itself. The early-movers read shows the score's
+    // arithmetic whenever that lens is on.
+    var spike = '';
+    if (row.flags.indexOf('spike-capped') >= 0) {
+      spike = '<p class="warn"><strong>Spike check — do not trust the jump yet.</strong> Its 7-day TVL rose +' +
+        row.change_7d.toFixed(1) + '%, but the model caps growth at +60%, so momentum is ' +
+        row.momentum.toFixed(2) + '× and no higher. Its early-mover score ' + row.early_score.toFixed(2) +
+        ' is momentum × youth (' + ageLabel(row.age_days) + ' old), so the spike alone lifts its early rank. ' +
+        'Treat the spike as unverified until the Week 0 check finds one deposit or a new vault behind it; ' +
+        'if the inflow reverses, the implied value falls with it.</p>';
+    }
+    var earlyRead = '';
+    if (lensEl.value === 'early') {
+      var youth = 1.5 - Math.min(row.age_days === null ? 365 : row.age_days, 1095) / 1095;
+      earlyRead = '<p class="compare">Early-movers read: early score ' + row.early_score.toFixed(2) +
+        ' = momentum ' + row.momentum.toFixed(2) + '× × youth ' + youth.toFixed(2) +
+        ' (' + ageLabel(row.age_days) + ' old). Youth, not size, is what this lens rewards.</p>';
+    }
     detailEl.hidden = false;
     detailEl.innerHTML =
       '<button class="close" id="closeDetail">Close ×</button>' +
@@ -167,10 +192,13 @@
       '<p class="sub">' + esc(row.category || 'No category') + ' · ' + esc(row.chains.join(', ')) +
       ' · TVL ' + money(row.tvl_usd) + ' · snapshot ' + esc(R.as_of) + '</p>' +
       '<p class="why">' + esc(whySentence(row)) + '</p>' +
+      spike +
       '<p class="compare">#' + row.category_rank + ' in ' + esc(row.category || 'no category') + ' · ' +
       (row.category_implied_share * 100).toFixed(1) + '% of its category\u2019s implied value · ' +
       row.peers + ' token-having peer' + (row.peers === 1 ? '' : 's') + ' set the ' + row.multiple.toFixed(3) +
-      '× multiple · value density ' + row.density.toFixed(3) + '×.</p>' +
+      '× multiple · value density ' + row.density.toFixed(3) + '× · ' +
+      (row.implied_value_usd / R.total_implied_usd * 100).toFixed(1) + '% of the board\u2019s total implied value.</p>' +
+      earlyRead +
       '<div class="factors">' +
       factorBar('Category multiple', row.multiple, 0.8, row.multiple.toFixed(3) + '×') +
       factorBar('Momentum', row.momentum, 1.24, row.momentum.toFixed(2) + '×') +
@@ -179,7 +207,7 @@
       factorBar('Credibility', row.credibility, 1, row.credibility.toFixed(2) + '×') +
       '</div>' +
       (flags ? '<ul class="flags">' + flags + '</ul>' : '') +
-      '<h3>Farm plan — 5 steps, weekly cadence</h3>' +
+      '<h3>Farm plan — 6 steps, Week 0 verify first, then a weekly cadence</h3>' +
       '<ol class="steps">' + steps + '</ol>';
     document.getElementById('closeDetail').addEventListener('click', function () {
       detailEl.hidden = true;
@@ -214,7 +242,7 @@
     }).join('');
     countEl.textContent = 'Showing ' + shown.length + ' of ' + state.total + ' matching protocols' +
       (state.total < R.row_count ? ' (' + R.row_count + ' on the board)' : ' — the full board') +
-      (lens === 'early' ? ' · Early-movers lens: momentum × youth.'
+      (lens === 'early' ? ' · Early-movers lens: momentum × youth. A capped +60% spike can still lift a row — open its detail and read the spike check before farming.'
         : lens === 'density' ? ' · Value-density lens: implied value per dollar of TVL.'
         : ' · Implied-value lens.') +
       ' * = 7-day change winsorised for the model.';

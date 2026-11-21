@@ -13,7 +13,8 @@
   <h1>Which pre-token protocol is worth farming next?</h1>
   <p class="lede">Every protocol below <strong>records no token</strong> in the snapshot — that is the
   record, not proof it has none. Each is ranked by what its launch would be worth if its record
-  stayed as it is, with the five steps to farm it. Implied values are this board's own claim,
+  stayed as it is, with the six steps to farm it — a Week 0 check of the record first, then five
+  weekly steps. Implied values are this board's own claim,
   never a prediction that a token will launch, or when.</p>
   <dl class="stats" id="stats"></dl>
 </header>
@@ -96,7 +97,12 @@
   snapshot at run time — see <code>lib/model.ts</code>, functions <code>categoryMultiples</code>,
   <code>scoreProtocol</code> and <code>farmPlan</code>. v2 adds per-row category rank, category share,
   peer count and value density, a top-10 category summary, a third lens (value density) and a Show more
-  control; the model and the ranking are unchanged.</p>
+  control; the model and the ranking are unchanged. v3 adds a Week 0 verification step to every
+  farm plan — a $0, category-specific check of the record (TVL in the same ballpark, no token
+  listed) plus the sharpest warning the row's own flags raise — and the detail view now spells
+  out the spike check for capped 7-day jumps and the early-score arithmetic when the
+  early-movers lens is on; the category summary calls out its concentration, and each detail
+  shows the row's share of the board's total implied value.</p>
 </footer>
 <script src="app.js"></script>
 </body>
