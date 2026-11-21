@@ -42,7 +42,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin: 0 0 20px;
+  margin: 0 0 14px;
 }
 .stats div {
   background: var(--card);
@@ -57,13 +57,13 @@ h1 {
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 18px;
+  padding: 10px 16px;
+  margin-bottom: 14px;
 }
 .method summary { cursor: pointer; font-weight: 700; font-size: 16px; }
 .method code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
-.method ul { margin: 10px 0; padding-left: 20px; }
-.method li { margin-bottom: 6px; }
+.method ul { margin: 10px 0; padding-left: 20px; columns: 2; column-gap: 28px; }
+.method li { margin-bottom: 6px; break-inside: avoid; }
 .mult-table { border-collapse: collapse; font-size: 13px; margin-top: 8px; }
 .mult-table th, .mult-table td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
 .mult-table th { background: var(--gold-soft); }
@@ -81,15 +81,38 @@ h1 {
 .catsum tbody tr.cat-row { cursor: pointer; }
 .catsum tbody tr.cat-row:hover { background: var(--accent-soft); }
 .catsum tbody tr.cat-row.active { background: var(--sage-soft); }
-.early-lead {
-  background: var(--sage-soft);
-  border: 1px solid var(--sage);
-  border-left: 4px solid var(--sage);
+.cat-toggle {
+  border: 1px solid var(--accent);
+  background: var(--card);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+.cat-toggle:hover { background: var(--accent-soft); }
+.mult-jump { font-size: 13px; color: var(--muted); }
+.mult-jump a { color: var(--accent); font-weight: 700; }
+/* Second level of the method box (v5): the 34-row multiples table is
+   folded by default so the open method box stays short and the board
+   starts on the first screen; the jump link above opens it directly. */
+.multiples { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.multiples summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.multiples p { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.lens-lead {
+  border: 1px solid;
+  border-left-width: 4px;
   border-radius: 8px;
   padding: 10px 14px;
   margin: 0 0 12px;
   font-size: 14px;
 }
+.lens-lead.early { background: var(--sage-soft); border-color: var(--sage); }
+.lens-lead.implied { background: var(--gold-soft); border-color: var(--gold); }
+.lens-lead.density { background: var(--accent-soft); border-color: var(--accent); }
 .detail .compare { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
 #showMore {
   border: 1px solid var(--accent);
@@ -105,12 +128,12 @@ h1 {
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 8px 12px;
   align-items: end;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   margin-bottom: 6px;
 }
 .controls label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
@@ -121,10 +144,10 @@ h1 {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 8px;
-  min-width: 150px;
+  padding: 5px 7px;
+  min-width: 120px;
 }
-.count { color: var(--muted); font-size: 13px; margin: 10px 0; }
+.count { color: var(--muted); font-size: 13px; margin: 8px 0; }
 .detail {
   background: var(--card);
   border: 1px solid var(--line);
@@ -206,4 +229,16 @@ footer code { background: var(--accent-soft); padding: 0 4px; border-radius: 4px
   .stats { grid-template-columns: repeat(2, 1fr); }
   .factors { grid-template-columns: repeat(2, 1fr); }
   h1 { font-size: 26px; }
+  /* v5: the board drops its three least-informative columns on a phone
+     (Chains, Age and Category stay one click away in the detail view),
+     the share bar goes (the % stays), and numeric headers may wrap, so
+     the remaining six columns fit 390px with no sideways scroll at all. */
+  .board th:nth-child(3), .board td:nth-child(3),
+  .board th:nth-child(4), .board td:nth-child(4),
+  .board th:nth-child(7), .board td:nth-child(7) { display: none; }
+  .board .bar { display: none; }
+  .board th.num, .board td.num { white-space: normal; }
+  .board th, .board td { padding: 6px 3px; font-size: 12px; }
+  .method ul { columns: 1; }
+  .controls input[type="search"], .controls select { min-width: 0; }
 }

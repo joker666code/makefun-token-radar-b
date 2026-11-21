@@ -45,25 +45,69 @@
   var cells = R.category_multiples.map(function (c) {
     return '<tr><td>' + esc(c.category) + '</td><td>' + c.peers + '</td><td>' + c.multiple.toFixed(3) + '</td></tr>';
   }).join('');
-  mult.innerHTML = '<p>Category multiples actually used (median mcap/TVL of token-having peers, ' +
-    'shrunk toward the global median ' + R.global_median.toFixed(3) + '):</p>' +
+  mult.innerHTML =
     '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th>Peers</th><th>Multiple</th></tr></thead><tbody>' +
-    cells + '</tbody></table></div>';
+    cells + '</tbody></table></div>' +
+    '<p>Each multiple is the median mcap/TVL of that category\u2019s token-having peers, shrunk toward the global median ' +
+    R.global_median.toFixed(3) + ' when peers are few, then clamped to 0.05–0.80.</p>';
+
+  // Two-level method box (v5): the multiples table is folded by default;
+  // the jump link opens it and scrolls it into view, and ?multiples=1
+  // opens it on load (deep link + screenshot).
+  var multiplesBox = document.getElementById('multiplesBox');
+  document.getElementById('multJump').addEventListener('click', function (ev) {
+    ev.preventDefault();
+    multiplesBox.open = true;
+    multiplesBox.scrollIntoView({ block: 'start' });
+  });
+  if (params.get('multiples') === '1') multiplesBox.open = true;
 
   var catSummary = document.getElementById('catSummary');
-  var sumCells = R.category_summary.map(function (c) {
+  // Full summary, computed from the rows (v5): the shipped Top 10 in
+  // data.js is the head of this same list — same order, same totals —
+  // so the table agrees with it and adds the other 23 categories, which
+  // previously needed the Category dropdown to reach at all. A category's
+  // multiple is the same on every one of its rows, so the first row's
+  // value stands for the category.
+  var byCat = {};
+  R.rows.forEach(function (r) {
+    var c = r.category || '(no category)';
+    var e = byCat[c];
+    if (!e) { e = byCat[c] = { category: c, rows: 0, total_implied_usd: 0, multiple: r.multiple }; }
+    e.rows += 1;
+    e.total_implied_usd += r.implied_value_usd;
+  });
+  var fullSummary = Object.keys(byCat).map(function (k) { return byCat[k]; })
+    .sort(function (a, b) { return b.total_implied_usd - a.total_implied_usd; });
+  fullSummary.forEach(function (c) { c.share = c.total_implied_usd / R.total_implied_usd; });
+  function sumRow(c) {
     return '<tr class="cat-row" data-cat="' + esc(c.category) + '" title="Filter the board by ' + esc(c.category) + '"><td>' + esc(c.category) + '</td><td class="num">' + c.rows + '</td>' +
       '<td class="num">' + money(c.total_implied_usd) + '</td><td class="num">' + c.multiple.toFixed(3) + '×</td>' +
       '<td class="num">' + (c.share * 100).toFixed(1) + '%</td></tr>';
-  }).join('');
-  var topCat = R.category_summary[0];
+  }
+  var topCat = fullSummary[0];
+  var restCats = fullSummary.slice(10);
+  var restTotal = restCats.reduce(function (a, c) { return a + c.total_implied_usd; }, 0);
+  var restShare = restTotal / R.total_implied_usd;
   catSummary.innerHTML = '<h2>Where the implied value sits</h2>' +
-    '<p>Top 10 categories by total implied value on this board — the multiple shown is the one the model actually used for that category. Click a row to filter the board by that category; click it again to clear.</p>' +
+    '<p>Top 10 of ' + fullSummary.length + ' categories by total implied value on this board — the multiple shown is the one the model actually used for that category. Click a row to filter the board by that category; click it again to clear. The other ' + restCats.length + ' categories together hold ' + money(restTotal) + ' (' + (restShare * 100).toFixed(1) + '% of the board) — the long tail.</p>' +
     '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Total implied</th><th class="num">Multiple</th><th class="num">Share</th></tr></thead><tbody>' +
-    sumCells + '</tbody></table></div>' +
+    fullSummary.slice(0, 10).map(sumRow).join('') + '</tbody><tbody id="catRest" hidden>' +
+    restCats.map(sumRow).join('') + '</tbody></table></div>' +
+    '<button class="cat-toggle" id="catToggle" type="button" aria-expanded="false">Show all ' + fullSummary.length + ' categories</button>' +
     '<p><strong>Concentration:</strong> ' + esc(topCat.category) + ' alone holds ' +
     (topCat.share * 100).toFixed(1) + '% of the board\u2019s implied value across ' + topCat.rows +
     ' rows — the value is concentrated, not spread. A category this heavy moves the whole board.</p>';
+  // Show-all toggle (v5): the 23 tail categories are in the table from
+  // the start (and clickable), just folded until asked for.
+  var catToggle = document.getElementById('catToggle');
+  var catRest = document.getElementById('catRest');
+  catToggle.addEventListener('click', function () {
+    var open = catRest.hidden;
+    catRest.hidden = !open;
+    catToggle.setAttribute('aria-expanded', String(open));
+    catToggle.textContent = open ? 'Show fewer (top 10)' : 'Show all ' + fullSummary.length + ' categories';
+  });
   // Clickable category rows (v4): a row filters the board to its category
   // (the same control as the Category dropdown), a second click clears it.
   catSummary.querySelectorAll('.cat-row').forEach(function (tr) {
@@ -92,7 +136,7 @@
   var sortEl = document.getElementById('sort');
   var rowsEl = document.getElementById('rows');
   var countEl = document.getElementById('count');
-  var earlyLeadEl = document.getElementById('earlyLead');
+  var lensLeadEl = document.getElementById('lensLead');
   var moreEl = document.getElementById('more');
   var detailEl = document.getElementById('detail');
   var lensHead = document.getElementById('lensHead');
@@ -228,6 +272,68 @@
     detailEl.scrollIntoView({ block: 'start' });
   }
 
+  // Leader in one sentence, for every lens (v4 early, v5 implied +
+  // density): the leader's own figures, why it leads the runner-up, and
+  // the caveat when the leader's jump was capped. All figures come from
+  // the rows, so the sentence stays true under any filter. The leader is
+  // picked by the lens metric, not by the board's sort order — sorting by
+  // TVL must not change who the sentence calls the leader.
+  var FACTORS = [
+    { key: 'momentum', label: 'momentum', disp: function (r) { return r.momentum.toFixed(2) + '×'; } },
+    { key: 'seasoning', label: 'seasoning', disp: function (r) { return r.seasoning.toFixed(2) + '×'; },
+      extra: function (r) { return (r.age_days === null || r.age_days === undefined) ? 'unknown age' : r.age_days + ' days'; } },
+    { key: 'breadth', label: 'breadth', disp: function (r) { return r.breadth.toFixed(2) + '×'; },
+      extra: function (r) { return r.chains.length + (r.chains.length === 1 ? ' chain' : ' chains'); } },
+    { key: 'credibility', label: 'credibility', disp: function (r) { return r.credibility.toFixed(2); } }
+  ];
+  function factorCmp(f, a, b) {
+    var s = f.label + ' (' + f.disp(a);
+    if (f.extra) s += ', ' + f.extra(a);
+    s += ' vs ' + f.disp(b);
+    if (f.extra) s += ', ' + f.extra(b);
+    return s + ')';
+  }
+  // Split the leader-vs-runner-up comparison into its parts; each lens
+  // sentence composes them in its own order. The multiple is phrased on
+  // its own (same / higher / lower), never also as a lead/trail.
+  function whyParts(lead, second) {
+    var multSame = Math.abs(lead.multiple - second.multiple) < 0.0005;
+    var multBit = multSame
+      ? 'the same ' + lead.multiple.toFixed(3) + '× multiple'
+      : 'a ' + (lead.multiple > second.multiple ? 'higher' : 'lower') + ' multiple (' +
+        lead.multiple.toFixed(3) + '× vs ' + second.multiple.toFixed(3) + '×)';
+    var tvlBit = '';
+    if (money(lead.tvl_usd) !== money(second.tvl_usd)) {
+      var ratio = lead.tvl_usd / second.tvl_usd;
+      if (ratio < 0.98 || ratio > 1.02) {
+        var how = ratio < 0.5 ? 'a far smaller' : ratio < 1 ? 'a smaller' : ratio < 2 ? 'a larger' : 'a far larger';
+        tvlBit = how + ' TVL (' + money(lead.tvl_usd) + ' vs ' + money(second.tvl_usd) + ')';
+      } else {
+        tvlBit = 'a fractionally ' + (ratio < 1 ? 'smaller' : 'larger') + ' TVL (' +
+          money(lead.tvl_usd) + ' vs ' + money(second.tvl_usd) + ')';
+      }
+    }
+    var leads = [], trails = [];
+    FACTORS.forEach(function (f) {
+      var d = lead[f.key] - second[f.key];
+      if (d > 0.001) leads.push(f);
+      else if (d < -0.001) trails.push(f);
+    });
+    return {
+      multBit: multBit,
+      tvlBit: tvlBit,
+      leadsText: leads.map(function (f) { return factorCmp(f, lead, second); }).join(' and '),
+      trailsText: trails.map(function (f) { return factorCmp(f, lead, second); }).join(' and ')
+    };
+  }
+  function metricOf(r, lensName) {
+    return lensName === 'early' ? r.early_score : lensName === 'density' ? r.density : r.implied_value_usd;
+  }
+  function topTwo(list, lensName) {
+    var sorted = list.slice().sort(function (a, b) { return metricOf(b, lensName) - metricOf(a, lensName); });
+    return { lead: sorted[0], second: sorted[1] || null };
+  }
+
   function render() {
     var state = currentRows();
     var lens = state.lens;
@@ -236,11 +342,18 @@
     catSummary.querySelectorAll('.cat-row').forEach(function (tr) {
       tr.classList.toggle('active', catSel.value !== '' && tr.getAttribute('data-cat') === catSel.value);
     });
-    // Early-movers leader, in one sentence at the top of the board (v4):
-    // the score's arithmetic, why it leads, and the spike caveat when the
-    // leader's jump was capped. All figures come from the row itself, so
-    // the sentence stays true under any filter.
-    if (lens === 'early' && state.list.length > 0) {
+    var filtered = qEl.value.trim() !== '' || catSel.value !== '' ||
+      Number(minTvlEl.value) > 0 || watchEl.checked;
+    var scopeBit = filtered ? ' among the matching rows' : '';
+    lensLeadEl.className = 'lens-lead ' + lens;
+    if (state.list.length === 0) {
+      lensLeadEl.hidden = true;
+      lensLeadEl.textContent = '';
+    } else if (lens === 'early') {
+      // Early-movers leader, in one sentence at the top of the board (v4):
+      // the score's arithmetic, why it leads, and the spike caveat when the
+      // leader's jump was capped. All figures come from the row itself, so
+      // the sentence stays true under any filter.
       var lead = state.list[0];
       var youthOf = function (r) { return 1.5 - Math.min(r.age_days === null || r.age_days === undefined ? 365 : r.age_days, 1095) / 1095; };
       // Exact days, not the table's rounded "2mo": the reader should be
@@ -249,8 +362,6 @@
         return (r.age_days === null || r.age_days === undefined)
           ? 'unknown age' : r.age_days + (r.age_days === 1 ? ' day' : ' days') + ' old';
       };
-      var filtered = qEl.value.trim() !== '' || catSel.value !== '' ||
-        Number(minTvlEl.value) > 0 || watchEl.checked;
       var growthBit = (lead.change_7d === null || lead.change_7d === undefined)
         ? '7-day change unreported'
         : '7-day TVL ' + (lead.change_7d > 0 ? '+' : '') + lead.change_7d.toFixed(1) + '%' +
@@ -272,13 +383,59 @@
       var spikeBit = (lead.change_7d !== null && lead.change_7d !== undefined && lead.change_7d >= 60)
         ? ', and the spike stays unverified until its Week 0 check'
         : '';
-      earlyLeadEl.hidden = false;
-      earlyLeadEl.textContent = 'Early-movers leader ' + lead.name + ' scores ' + lead.early_score.toFixed(2) +
+      lensLeadEl.hidden = false;
+      lensLeadEl.textContent = 'Early-movers leader ' + lead.name + ' scores ' + lead.early_score.toFixed(2) +
         ' = momentum ' + lead.momentum.toFixed(2) + '× (' + growthBit + ') × youth ' + youthOf(lead).toFixed(2) +
         ' (' + ageExact(lead) + ')' + secondBit + tieBit + spikeBit + '.';
+    } else if (lens === 'density') {
+      // Value-density leader (v5), same shape as the early sentence: the
+      // density's arithmetic, why it leads, and where it sits by implied
+      // value — the lens is about efficiency, not size, so a leader ranked
+      // #57 by implied value is the point, not a surprise.
+      var dTop = topTwo(state.list, 'density');
+      var dLead = dTop.lead, dSecond = dTop.second;
+      var dText = 'Value-density leader ' + dLead.name + ' converts TVL at ' + dLead.density.toFixed(3) +
+        '× — ' + money(dLead.implied_value_usd) + ' implied on ' + money(dLead.tvl_usd) + ' TVL, ' +
+        dLead.multiple.toFixed(3) + '× ' + (dLead.category || 'no category') + ' multiple × ' +
+        dLead.momentum.toFixed(2) + '× momentum × ' + dLead.seasoning.toFixed(2) + '× seasoning × ' +
+        dLead.breadth.toFixed(2) + '× breadth × ' + dLead.credibility.toFixed(2) + ' credibility';
+      if (dSecond) {
+        var dWhy = whyParts(dLead, dSecond);
+        dText += ' — ahead of ' + dSecond.name + ' (' + dSecond.density.toFixed(3) + '×)' + scopeBit +
+          ', on ' + dWhy.multBit +
+          (dWhy.leadsText ? ', leading on ' + dWhy.leadsText : '') +
+          (dWhy.trailsText ? ', enough to outweigh weaker ' + dWhy.trailsText : '') +
+          (dWhy.tvlBit ? ', on ' + dWhy.tvlBit : '');
+      } else {
+        dText += filtered ? ' — the only matching row' : ' — the only row on the board';
+      }
+      if (dLead.rank > 10) dText += ', while ranking only #' + dLead.rank + ' by implied value';
+      lensLeadEl.hidden = false;
+      lensLeadEl.textContent = dText + '.';
     } else {
-      earlyLeadEl.hidden = true;
-      earlyLeadEl.textContent = '';
+      // Implied-value leader (v5): the factor arithmetic, then why it
+      // leads the runner-up. The factor displays are rounded (as in the
+      // detail view), so the sentence lists them with commas, not with
+      // an equals sign.
+      var iTop = topTwo(state.list, 'implied');
+      var iLead = iTop.lead, iSecond = iTop.second;
+      var iText = 'Implied-value leader ' + iLead.name + ' is worth ' + money(iLead.implied_value_usd) +
+        ' — TVL ' + money(iLead.tvl_usd) + ' at a ' + iLead.multiple.toFixed(3) + '× ' +
+        (iLead.category || 'no category') + ' multiple, momentum ' + iLead.momentum.toFixed(2) +
+        '×, seasoning ' + iLead.seasoning.toFixed(2) + '×, breadth ' + iLead.breadth.toFixed(2) +
+        '×, credibility ' + iLead.credibility.toFixed(2);
+      if (iSecond) {
+        var iWhy = whyParts(iLead, iSecond);
+        var onBits = [iWhy.tvlBit, iWhy.multBit].filter(function (x) { return x !== ''; }).join(' and ');
+        iText += ' — ahead of ' + iSecond.name + ' (' + money(iSecond.implied_value_usd) + ')' + scopeBit +
+          ', on ' + onBits +
+          (iWhy.leadsText ? ', leading on ' + iWhy.leadsText : '') +
+          (iWhy.trailsText ? ', enough to outweigh weaker ' + iWhy.trailsText : '');
+      } else {
+        iText += filtered ? ' — the only matching row' : ' — the only row on the board';
+      }
+      lensLeadEl.hidden = false;
+      lensLeadEl.textContent = iText + '.';
     }
     var shown = state.list.slice(0, shownCount);
     var maxImplied = top.implied_value_usd;

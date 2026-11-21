@@ -23,27 +23,30 @@
   <details class="method" id="method" open>
     <summary>How the value is worked out — the whole model, in the open</summary>
     <p><code>implied = TVL × category multiple × momentum × seasoning × breadth × credibility</code></p>
-    <ul>
-      <li><strong>Category multiple.</strong> The median market-cap / TVL of the token-having protocols in the
-      same category, shrunk toward the snapshot's global median when a category has few peers, then clamped
-      to 0.05–0.80. No name is ever hard-coded: the multiples come from this snapshot's own figures.</li>
-      <li><strong>Momentum.</strong> 1 + 0.4 × the 7-day TVL change, winsorised to −40%…+60%. A spike above
-      +60% is capped and flagged — check it is not mercenary capital before you trust it.</li>
-      <li><strong>Seasoning.</strong> 0.75 + 0.25 × age / 3 years. Older protocols with no token yet have
-      survived longer without one; unknown age takes the 0.75 floor.</li>
-      <li><strong>Breadth.</strong> +2% per extra chain, at most +8%.</li>
-      <li><strong>Credibility.</strong> Starts at 1.00 and loses 0.03 for a missing 7-day change, 0.03 for a
-      missing listing date, 0.02 for TVL under $10M, 0.02 for a single chain (floor 0.90). Thin or
-      incomplete records are penalised, never rewarded — and nobody is dropped from the board for them.</li>
-    </ul>
     <p>Three lenses: <strong>Implied value</strong> ranks by the model above; <strong>Early movers</strong>
     ranks by momentum × youth, the protocols moving fastest while still young; <strong>Value density</strong>
     ranks by implied value per dollar of TVL, the protocols whose TVL converts most efficiently. The board covers all 40
     watchlist protocols plus 158 more below the $50M floor.</p>
-    <div id="multiples"></div>
+    <p class="mult-jump"><a href="#multiplesBox" id="multJump">The five factors and the 34 category multiples ↓</a>
+    The full workings stay folded so the board stays on the first screen.</p>
+    <details class="multiples" id="multiplesBox">
+      <summary>The five factors and the 34 category multiples — the whole model</summary>
+      <ul>
+        <li><strong>Category multiple.</strong> The median market-cap / TVL of the token-having protocols in the
+        same category, shrunk toward the snapshot's global median when a category has few peers, then clamped
+        to 0.05–0.80. No name is ever hard-coded: the multiples come from this snapshot's own figures.</li>
+        <li><strong>Momentum.</strong> 1 + 0.4 × the 7-day TVL change, winsorised to −40%…+60%. A spike above
+        +60% is capped and flagged — check it is not mercenary capital before you trust it.</li>
+        <li><strong>Seasoning.</strong> 0.75 + 0.25 × age / 3 years. Older protocols with no token yet have
+        survived longer without one; unknown age takes the 0.75 floor.</li>
+        <li><strong>Breadth.</strong> +2% per extra chain, at most +8%.</li>
+        <li><strong>Credibility.</strong> Starts at 1.00 and loses 0.03 for a missing 7-day change, 0.03 for a
+        missing listing date, 0.02 for TVL under $10M, 0.02 for a single chain (floor 0.90). Thin or
+        incomplete records are penalised, never rewarded — and nobody is dropped from the board for them.</li>
+      </ul>
+      <div id="multiples"></div>
+    </details>
   </details>
-
-  <section class="catsum" id="catSummary" aria-label="Where the implied value sits"></section>
 
   <section class="controls" aria-label="Filter and sort">
     <label>Search <input id="q" type="search" placeholder="protocol name or slug…" autocomplete="off"></label>
@@ -70,7 +73,7 @@
   </section>
 
   <p class="count" id="count"></p>
-  <p class="early-lead" id="earlyLead" hidden></p>
+  <p class="lens-lead" id="lensLead" hidden></p>
 
   <section class="detail" id="detail" hidden></section>
 
@@ -87,6 +90,8 @@
 
   <p class="more" id="more"></p>
   <div class="more"><button id="showMore" type="button">Show more</button></div>
+
+  <section class="catsum" id="catSummary" aria-label="Where the implied value sits"></section>
 </main>
 
 <footer>
@@ -109,7 +114,16 @@
   default so the 34 category multiples are visible on load, makes every category-summary
   row clickable to filter the board by that category (click again to clear), and reads
   the early-movers leader in one sentence at the top of the board whenever that lens is
-  on; the model and the ranking are unchanged.</p>
+  on; the model and the ranking are unchanged. v5 reads the leader in one sentence for
+  the other two lenses as well (implied value and value density, same shape as the early
+  one, every figure computed from the rows), turns the method box into two levels — the
+  formula and the three lenses stay open on load while the five factors and the 34-row
+  multiples table fold into one collapsed level, with a jump link that opens it and
+  scrolls it into view — and moves the category summary below the board, so the board
+  starts on the first screen again; the summary itself expands from its top 10 to all
+  33 categories on the board, and the board hides its Chains, Age and Category columns
+  at phone width so it fits 390px with no sideways scroll (all three stay visible in
+  the detail view); the model and the ranking are unchanged.</p>
 </footer>
 <script src="app.js"></script>
 </body>

@@ -128,6 +128,45 @@ interaction and explanation, not re-scoring:
   opens by default. 1-board now scrolls to the count line first, since
   the open method box pushes the board below the fold.
 
+## v5 (2026-11-21)
+
+Same model, same ranking, same $4.99B total — the work is dashboard
+explanation and layout, not re-scoring:
+
+- **The other two lenses read their leader in one sentence**, same shape
+  as the early one (v4), every figure computed from the rows: Steakhouse
+  Financial leads on implied value ($840.3M) because its seasoning and
+  breadth beat Sentora Curator's on a fractionally smaller TVL and the
+  same 0.326× multiple; Manta CeDeFi leads on value density (0.422×)
+  on momentum and seasoning, despite a single chain and a 0.98
+  credibility dock, while ranking only #57 by implied value. The
+  sentence follows any filter and never changes when the Sort dropdown
+  changes — the leader is picked by the lens metric, not the sort order.
+- **The method box is two levels now.** The outer box stays open with
+  the formula and the three lenses; the five factors and the 34-row
+  multiples table fold into one collapsed level, with a jump link that
+  opens it and scrolls it into view (and a `?multiples=1` deep link).
+  Folding the table alone did not bring the board back on the first
+  screen (measured: board top still 1,734px, the category summary sits
+  between), so the summary moved below the board and the spacing above
+  it was tightened — the board now starts at 835px in a 1440×900
+  viewport. The trade: the five factors are one click away instead of
+  visible on load.
+- **The category summary covers all 33 categories**, computed from the
+  rows (it agrees with the shipped Top 10 exactly). The top 10 show by
+  default; "Show all 33 categories" reveals the other 23 ($607.2M
+  combined, 12.2% of the board), and every row — including the folded
+  ones — still filters the board on click.
+- **Mobile fits 390px with no sideways scroll.** The board hides its
+  Chains, Age and Category columns at phone width, drops the share bar
+  (the % stays), and lets numeric cells wrap, so it measures exactly
+  350px in all three lenses. All three columns stay visible in the
+  detail view.
+- **Screenshot 3 changes again:** it now loads `?multiples=1` and shows
+  the open second level (factors in two columns, multiples table from
+  the top). Screenshot 4 now frames the density leader sentence with
+  the density board; screenshot 1 frames the implied leader sentence.
+
 ## Run it
 
 ```sh
