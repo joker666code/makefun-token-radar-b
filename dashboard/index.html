@@ -20,13 +20,20 @@
 </header>
 
 <main>
-  <details class="method" id="method" open>
-    <summary>How the value is worked out — the whole model, in the open</summary>
+  <details class="method" id="method">
+    <summary>How the value is worked out — the whole model, in the open <span class="sum-hint">Show the model ↓</span></summary>
     <p><code>implied = TVL × category multiple × momentum × seasoning × breadth × credibility</code></p>
     <p>Three lenses: <strong>Implied value</strong> ranks by the model above; <strong>Early movers</strong>
     ranks by momentum × youth, the protocols moving fastest while still young; <strong>Value density</strong>
     ranks by implied value per dollar of TVL, the protocols whose TVL converts most efficiently. The board covers all 40
     watchlist protocols plus 158 more below the $50M floor.</p>
+    <p><strong>Why the board totals $4.99B — 3.7× the $1.35B a flat 0.08× multiple gives on the same
+    snapshot:</strong> this board's multiples come from each category's own token-having peers (the snapshot's
+    global median is 0.214×, not 0.08×), and the biggest categories carry above-median multiples — Risk Curators,
+    which alone holds 54.9% of the board's implied value, is 0.326×. The flat route's own check below its $50M floor found a median of 0.419×
+    among 76 smaller token-having protocols, so a single 0.08× understates small protocols rather than
+    flattering them; the category multiples are the same evidence, applied per category.</p>
+    <div id="sensitivity"></div>
     <p class="mult-jump"><a href="#multiplesBox" id="multJump">The five factors and the 34 category multiples ↓</a>
     The full workings stay folded so the board stays on the first screen.</p>
     <details class="multiples" id="multiplesBox">
@@ -127,7 +134,13 @@
   summary by default instead of behind a toggle, adds a Show all 198 button beside Show more,
   puts each protocol's category back on phones as a small line under its name, and reads every
   protocol's standing against its lens leader in the detail view; the model and the ranking are
-  unchanged.</p>
+  unchanged. v7 folds the method box by default so the board starts on the first screen, adds a
+  sensitivity audit to the method box (eight one-change re-ranks plus one joint change, computed at render time from the
+  same data as the board and cross-checked against the build-time audit in <code>lib/model.ts</code>,
+  function <code>buildSensitivity</code>), warns where a multiple rests on one peer or none, explains
+  why the board totals $4.99B against a flat 0.08× route's $1.35B, gives the Weeks 3–4 deepen step a
+  deterministic selection rule, and states the sizing reason on the 7 farm plans whose probe a cap
+  actually cuts; the ranking and the $4.99B total are unchanged, only farm-step wording changes.</p>
 </footer>
 <script src="app.js"></script>
 </body>

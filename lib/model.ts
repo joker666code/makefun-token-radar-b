@@ -46,6 +46,15 @@
 // out the spike check and the early-score arithmetic for the
 // early-movers lens. Same ranking, same $4.99B total, more information
 // per row.
+//
+// v7 also leaves the ranking alone. It adds the sensitivity audit the
+// model was missing (buildSensitivity: eight one-change re-ranks plus one
+// joint change, reported as top-10 overlap / biggest rank move / rows
+// moved >10 / rank #1 same),
+// a deterministic selection rule for the Weeks 3-4 deepen step, and a
+// sizing reason on the 7 farm plans whose probe a cap actually cuts.
+// Same ranking, same $4.99B total — only the farm-step wording changes,
+// so board.json differs from v6 in farm_steps text alone.
 
 export interface SnapshotProtocol {
   slug: string;
@@ -165,6 +174,30 @@ const BREADTH_STEP = 0.02;
 const BREADTH_CHAINS = 4;
 const SMALL_TVL_USD = 10_000_000;
 
+/**
+ * The model's tunable assumptions, as one object, so the sensitivity audit
+ * (buildSensitivity) can re-rank the board under one changed assumption at
+ * a time. The published board always uses DEFAULT_OPTS, so the audit never
+ * moves a rank: it only reports how far the ranking would move.
+ */
+export interface ModelOpts {
+  prior: number;
+  growthWeight: number;
+  seasonFloor: number;
+  breadthStep: number;
+  growthLow: number;
+  growthHigh: number;
+}
+
+export const DEFAULT_OPTS: ModelOpts = {
+  prior: SHRINK_PRIOR,
+  growthWeight: GROWTH_WEIGHT,
+  seasonFloor: SEASON_FLOOR,
+  breadthStep: BREADTH_STEP,
+  growthLow: GROWTH_LOW,
+  growthHigh: GROWTH_HIGH,
+};
+
 /** Parse and lightly validate the snapshot document. */
 export function parseSnapshot(text: string): Snapshot {
   const doc = JSON.parse(text) as Snapshot;
@@ -217,9 +250,10 @@ export function isCandidate(protocol: SnapshotProtocol): boolean {
 /**
  * Category multiples from the snapshot itself: for each category, the
  * median mcap/TVL of its token-having protocols, shrunk toward the global
- * median with a prior of SHRINK_PRIOR peers, then clamped.
+ * median with a prior of `prior` peers, then clamped. The published board
+ * uses prior 6; the sensitivity audit re-runs this with prior 3 and 12.
  */
-export function categoryMultiples(snapshot: Snapshot): {
+export function categoryMultiples(snapshot: Snapshot, prior: number = SHRINK_PRIOR): {
   globalMedian: number;
   byCategory: Map<string, number>;
   table: CategoryMultiple[];
@@ -241,7 +275,7 @@ export function categoryMultiples(snapshot: Snapshot): {
   const table: CategoryMultiple[] = [];
   for (const [category, list] of [...perCategory.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const catMedian = median(list);
-    const shrunk = (list.length * catMedian + SHRINK_PRIOR * globalMedian) / (list.length + SHRINK_PRIOR);
+    const shrunk = (list.length * catMedian + prior * globalMedian) / (list.length + prior);
     const multiple = clamp(shrunk, MULTIPLE_LOW, MULTIPLE_HIGH);
     byCategory.set(category, multiple);
     table.push({ category, peers: list.length, multiple: Math.round(multiple * 10000) / 10000 });
@@ -256,21 +290,24 @@ export interface Scoring {
   earlyScore: number;
 }
 
-/** Score one candidate protocol. Every input is a snapshot figure. */
+/** Score one candidate protocol. Every input is a snapshot figure.
+ * `opts` is DEFAULT_OPTS on the published board; the sensitivity audit
+ * passes one changed assumption at a time. */
 export function scoreProtocol(
   protocol: SnapshotProtocol,
   age: number | null,
   multiple: number,
+  opts: ModelOpts = DEFAULT_OPTS,
 ): Scoring {
   const momentum =
     protocol.change_7d === null
       ? 1
-      : 1 + (GROWTH_WEIGHT * clamp(protocol.change_7d, GROWTH_LOW, GROWTH_HIGH)) / 100;
+      : 1 + (opts.growthWeight * clamp(protocol.change_7d, opts.growthLow, opts.growthHigh)) / 100;
   const seasoning =
     age === null
-      ? SEASON_FLOOR
-      : SEASON_FLOOR + (1 - SEASON_FLOOR) * (Math.min(age, SEASON_DAYS) / SEASON_DAYS);
-  const breadth = 1 + BREADTH_STEP * Math.min(Math.max(protocol.chains.length - 1, 0), BREADTH_CHAINS);
+      ? opts.seasonFloor
+      : opts.seasonFloor + (1 - opts.seasonFloor) * (Math.min(age, SEASON_DAYS) / SEASON_DAYS);
+  const breadth = 1 + opts.breadthStep * Math.min(Math.max(protocol.chains.length - 1, 0), BREADTH_CHAINS);
 
   let credibility = 1;
   if (protocol.change_7d === null) credibility -= 0.03;
@@ -333,17 +370,44 @@ function coreAction(category: string | null): string {
   }
 }
 
-/** Probe size by TVL tier, capped for young protocols and spiked ones. */
-function probeDollars(protocol: SnapshotProtocol, age: number | null): number {
-  let probe = protocol.tvl_usd >= 1_000_000_000 ? 250
+/**
+ * Probe size by TVL tier, capped for young protocols and spiked ones.
+ * The caps are reported, not just applied: when one actually bites (the
+ * probe it produces is smaller than the TVL tier alone would allow), the
+ * Week 1 step says so and why — a capped size with no reason is not
+ * auditable. On this snapshot 7 of 198 rows are capped: 6 by the
+ * young-protocol cap, 1 (Shift DeFi) by the spike cap.
+ */
+function probeDetail(protocol: SnapshotProtocol, age: number | null): {
+  probe: number;
+  base: number;
+  youngCapped: boolean;
+  spikeCapped: boolean;
+} {
+  const base = protocol.tvl_usd >= 1_000_000_000 ? 250
     : protocol.tvl_usd >= 100_000_000 ? 150
     : protocol.tvl_usd >= 25_000_000 ? 100
     : 50;
-  if (age !== null && age < 180) probe = Math.min(probe, 100);
-  if (protocol.change_7d !== null && protocol.change_7d >= GROWTH_HIGH) {
-    probe = probe >= 250 ? 150 : probe >= 150 ? 100 : 50;
+  let probe = base;
+  let youngCapped = false;
+  let spikeCapped = false;
+  if (age !== null && age < 180 && probe > 100) {
+    probe = 100;
+    youngCapped = true;
   }
-  return probe;
+  if (protocol.change_7d !== null && protocol.change_7d >= GROWTH_HIGH) {
+    const after = probe >= 250 ? 150 : probe >= 150 ? 100 : 50;
+    if (after < probe) {
+      probe = after;
+      spikeCapped = true;
+    }
+  }
+  return { probe, base, youngCapped, spikeCapped };
+}
+
+/** Probe size by TVL tier, capped for young protocols and spiked ones. */
+function probeDollars(protocol: SnapshotProtocol, age: number | null): number {
+  return probeDetail(protocol, age).probe;
 }
 
 function money(n: number): string {
@@ -432,21 +496,33 @@ function verifyFlagNote(protocol: SnapshotProtocol, age: number | null): string 
 
 /** Six farm steps: a Week 0 verification, then five weekly-cadence steps, each with a cost in dollars and a time. */
 export function farmPlan(protocol: SnapshotProtocol, age: number | null): string[] {
-  const probe = probeDollars(protocol, age);
+  const sizing = probeDetail(protocol, age);
+  const probe = sizing.probe;
   const total = probe * 2;
   const action = coreAction(protocol.category);
   const chain = chainName(protocol);
   const young = age !== null && age < 180;
   const hold = young ? '30 days' : '45 days';
+  // The sizing reason (v7): when a cap actually bites, the Week 1 step
+  // says which cap and what the uncapped size would have been. Only the
+  // 7 capped rows carry this sentence; the other 191 read as before.
+  let sizingNote = '';
+  if (sizing.youngCapped && sizing.spikeCapped) {
+    sizingNote = ` The probe is capped at ${money(probe)} — its TVL alone would allow ${money(sizing.base)}, but it listed under 6 months ago and its 7-day TVL jumped +${protocol.change_7d!.toFixed(1)}%, so the young-protocol cap and the spike cap both bite.`;
+  } else if (sizing.youngCapped) {
+    sizingNote = ` The probe is capped at ${money(probe)} — its TVL alone would allow ${money(sizing.base)}, but it listed under 6 months ago, so the young-protocol cap holds it there.`;
+  } else if (sizing.spikeCapped) {
+    sizingNote = ` The probe is capped at ${money(probe)} — its TVL alone would allow ${money(sizing.base)}, but its 7-day TVL jumped +${protocol.change_7d!.toFixed(1)}%, so the spike cap drops it one tier.`;
+  }
   const verify =
     `Week 0, verify the record (15 minutes, $0 at risk): before spending anything, ${verifyCheck(protocol.category)}. ` +
     `Confirm its own page shows TVL in the same ballpark as ${money(protocol.tvl_usd)} and lists no token.` +
     `${verifyFlagNote(protocol, age)} Write down what each check shows; if any check cannot be confirmed, halve the Week 1 probe.`;
   return [
     verify,
-    `Week 1, probe (30 minutes to set up, then 7 days): use ${money(probe)} to ${action} on ${chain}. Save the transaction hash, check the next day that your balance reads above $0, and note the fee you paid.`,
+    `Week 1, probe (30 minutes to set up, then 7 days): use ${money(probe)} to ${action} on ${chain}. Save the transaction hash, check the next day that your balance reads above $0, and note the fee you paid.${sizingNote}`,
     `Week 2, scale (20 minutes, then 7 days): if the probe balance is above $0 and a withdrawal preview returns cleanly, add another ${money(probe)} so ${money(total)} is at risk in total. If either check fails, stop here and withdraw.`,
-    `Weeks 3-4, deepen (30 minutes, then 14 days): repeat the core action a second time through a different pool or vault on the same protocol, still with no more than ${money(total)} at risk. Open the protocol's incentives page if it has one and write down exactly what it shows, including when it shows nothing: do not assume points or an airdrop exist.`,
+    `Weeks 3-4, deepen (30 minutes, then 14 days): repeat the core action a second time through a different pool or vault on the same protocol — pick the largest one Week 1 did not use, ranking the protocol's pools or vaults by the size its own page shows; if it lists only one, use that same one again on a different chain it runs on, or the same chain if it runs on one — still with no more than ${money(total)} at risk. Open the protocol's incentives page if it has one and write down exactly what it shows, including when it shows nothing: do not assume points or an airdrop exist.`,
     `Ongoing, weekly routine (10 minutes a week for ${hold}): once a week re-check the protocol's TVL, your balance and whether any new pool or vault opened. Keep a one-line log with the date so a later token claim, if one ever appears, can be traced to real use.`,
     `Exit (about 30 minutes including confirmation): withdraw everything when any of these is true: the protocol's TVL falls 30% from where you entered, fees eat more than a tenth of your position, or a token launches and you have decided to take profits. Withdraw in one transaction and confirm the funds land back in your wallet.`,
   ];
@@ -541,6 +617,75 @@ export function buildRadar(snapshot: Snapshot): { board: BoardRow[]; radar: Rada
     rows: scored,
   };
   return { board: scored, radar };
+}
+
+export interface SensitivityRow {
+  /** One assumption changed, everything else as published. */
+  variant: string;
+  /** How many of the base top 10 stay in the variant's top 10. */
+  top10_overlap: number;
+  /** Largest absolute rank move of any row under the variant. */
+  max_rank_move: number;
+  /** Rows moving more than 10 places under the variant. */
+  rows_moved_gt10: number;
+  /** Whether rank #1 is the same protocol under the variant. */
+  rank1_same: boolean;
+}
+
+/** Rank the candidates under one set of assumptions, returning slug → rank
+ *  with the same sort (implied desc, TVL desc, slug asc) as the board. */
+function rankWithOpts(snapshot: Snapshot, opts: ModelOpts): Map<string, number> {
+  const { byCategory, globalMedian } = categoryMultiples(snapshot, opts.prior);
+  const scored = snapshot.protocols.filter(isCandidate).map((p) => {
+    const age = ageDays(p, snapshot.as_of);
+    const multiple = byCategory.get(p.category ?? '(no category)') ?? clamp(globalMedian, MULTIPLE_LOW, MULTIPLE_HIGH);
+    return { slug: p.slug, tvl: p.tvl_usd, implied: scoreProtocol(p, age, multiple, opts).implied };
+  });
+  scored.sort((a, b) => b.implied - a.implied || b.tvl - a.tvl || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
+  return new Map(scored.map((r, i) => [r.slug, i + 1]));
+}
+
+/**
+ * Re-rank the board under one changed assumption at a time — plus one
+ * joint change (the two most sensitive knobs together) — and report how
+ * far the ranking moves. The published board never changes: this is the
+ * audit that the ranking is not an artefact of one parameter choice. The
+ * dashboard recomputes this same table at render time from data.js (see
+ * dashboard/app.js, renderSensitivity) and the two agree exactly — the
+ * cross-check is verify-sensitivity.mjs beside this lane's REPORT.md.
+ */
+export function buildSensitivity(snapshot: Snapshot): SensitivityRow[] {
+  const base = rankWithOpts(snapshot, DEFAULT_OPTS);
+  const baseTop10 = new Set([...base.entries()].filter(([, r]) => r <= 10).map(([s]) => s));
+  const baseRank1 = [...base.entries()].find(([, r]) => r === 1)![0];
+  const variants: Array<[string, Partial<ModelOpts>]> = [
+    ['Shrink prior 3 (peers weigh more)', { prior: 3 }],
+    ['Shrink prior 12 (peers weigh less)', { prior: 12 }],
+    ['Momentum weight 0.3', { growthWeight: 0.3 }],
+    ['Momentum weight 0.5', { growthWeight: 0.5 }],
+    ['Maturity floor 0.65', { seasonFloor: 0.65 }],
+    ['Maturity floor 0.85', { seasonFloor: 0.85 }],
+    ['No breadth bonus', { breadthStep: 0 }],
+    ['Winsorise [-20%, +30%]', { growthLow: -20, growthHigh: 30 }],
+    // One joint change (v7.1): the two most sensitive knobs together, so
+    // the audit also answers whether the prior and momentum interact.
+    ['Prior 3 + momentum 0.5 (joint)', { prior: 3, growthWeight: 0.5 }],
+  ];
+  return variants.map(([variant, over]) => {
+    const opts = { ...DEFAULT_OPTS, ...over };
+    const vRank = rankWithOpts(snapshot, opts);
+    const vTop10 = [...vRank.entries()].filter(([, r]) => r <= 10).map(([s]) => s);
+    const overlap = vTop10.filter((s) => baseTop10.has(s)).length;
+    let maxMove = 0;
+    let moved = 0;
+    for (const [slug, rank] of base) {
+      const d = Math.abs((vRank.get(slug) ?? 0) - rank);
+      if (d > maxMove) maxMove = d;
+      if (d > 10) moved += 1;
+    }
+    const vRank1 = [...vRank.entries()].find(([, r]) => r === 1)![0];
+    return { variant, top10_overlap: overlap, max_rank_move: maxMove, rows_moved_gt10: moved, rank1_same: vRank1 === baseRank1 };
+  });
 }
 
 /**

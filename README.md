@@ -200,6 +200,51 @@ explanation and layout, not re-scoring:
   information is lost to the v5 column cut — and the board still
   measures 350px with no sideways scroll in all three lenses.
 
+## v7 (2026-11-21)
+
+Same model, same ranking, same $4.99B total — the work is the
+sensitivity audit the model was missing, the first screen, and the
+farm plans' last two gaps. Only farm-step wording changes, so
+board.json differs from v6 in `farm_steps` text alone; every rank,
+implied value, multiple and factor is identical.
+
+- **Sensitivity audit in the method box.** Nine re-ranks: eight
+  one-change variants (shrink prior 3/12, momentum weight 0.3/0.5,
+  maturity floor 0.65/0.85, no breadth bonus, winsorise
+  [-20%, +30%]) plus one joint change (prior 3 + momentum 0.5). Rank
+  #1 stays #1 under every variant and the top 10 keeps 9–10 of 10;
+  the shrink prior is the sensitive knob (prior 3: biggest move 20,
+  33 rows move >10; the joint change barely goes further at 21/35).
+  The table is computed at render time from the same data.js as the
+  board and cross-checked cell-for-cell against the build-time audit
+  in `lib/model.ts` (`buildSensitivity`).
+- **Thin-peer warnings.** 65 of 198 rows sit on a multiple set by one
+  peer (47) or none (18). The multiples table marks all 12 single-peer
+  categories, each detail view states what its peer count means, and a
+  footnote explains the 34-vs-33 count (34 categories have
+  token-having peers; the board spans 33; the 13 peerless board
+  categories take the global median).
+- **Why $4.99B is 3.7× the flat route's $1.35B**, in one paragraph in
+  the method box: multiples come from each category's own peers
+  (global median 0.214×, not 0.08×), Risk Curators alone holds 54.9%
+  at 0.326× — and the flat route's own below-floor check found a
+  median of 0.419× among 76 smaller token-having protocols.
+- **The method box is folded by default.** The board now starts at
+  587px in a 1440×900 viewport with 5 full rows on the first screen
+  (v5: 835px, header only). The formula and the three lenses are one
+  click away; the folded line carries a "Show the model ↓" hint.
+- **Farm plans: a deterministic deepen rule and sizing reasons.** The
+  Weeks 3–4 step now picks the largest pool or vault Week 1 did not
+  use (ranked by the size the protocol's own page shows), with
+  single-pool and single-chain fallbacks. The 7 capped probes say so:
+  6 young protocols are held at $100 by the young-protocol cap, Shift
+  DeFi at $50 by the spike cap. The detail lens read now follows the
+  filtered leader, and the phone sub-line adds the chain count.
+- **Re-rated (five items, same scale as the v5 final): 5 / 4 / 5 / 5 /
+  4.6 = 23.6/25**, up from 19.7. The value_model ceiling is honest:
+  with no realized launch valuations in the snapshot, calibration
+  cannot be backtested — the audit is the most the data allows.
+
 ## Run it
 
 ```sh

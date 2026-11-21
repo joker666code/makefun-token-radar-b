@@ -43,24 +43,149 @@
 
   var mult = document.getElementById('multiples');
   var cells = R.category_multiples.map(function (c) {
-    return '<tr><td>' + esc(c.category) + '</td><td>' + c.peers + '</td><td>' + c.multiple.toFixed(3) + '</td></tr>';
+    // Thin-multiple warning (v7): a multiple resting on one peer is one
+    // protocol's ratio carrying 1/7 of the weight after shrinkage — the
+    // reader should know before trusting it. No-peer categories never
+    // appear here: they take the global median instead (see below).
+    var note = c.peers === 1 ? 'Single peer — carries 1/7 of the weight' : '';
+    return '<tr><td>' + esc(c.category) + '</td><td>' + c.peers + '</td><td>' + c.multiple.toFixed(3) + '</td><td>' + note + '</td></tr>';
   }).join('');
+  var thinCats = R.category_multiples.filter(function (c) { return c.peers === 1; }).length;
+  var thinRows1 = R.rows.filter(function (r) { return r.peers === 1; }).length;
+  var thinRows0 = R.rows.filter(function (r) { return r.peers === 0; }).length;
+  var boardCats = {};
+  R.rows.forEach(function (r) { boardCats[r.category || '(no category)'] = true; });
+  var multCats = {};
+  R.category_multiples.forEach(function (c) { multCats[c.category] = true; });
+  var noPeerCats = Object.keys(boardCats).filter(function (c) { return !multCats[c]; }).length;
+  var unusedCats = Object.keys(multCats).filter(function (c) { return !boardCats[c]; }).length;
   mult.innerHTML =
-    '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th>Peers</th><th>Multiple</th></tr></thead><tbody>' +
+    '<div class="table-wrap"><table class="mult-table"><thead><tr><th>Category</th><th>Peers</th><th>Multiple</th><th>Note</th></tr></thead><tbody>' +
     cells + '</tbody></table></div>' +
     '<p>Each multiple is the median mcap/TVL of that category\u2019s token-having peers, shrunk toward the global median ' +
-    R.global_median.toFixed(3) + ' when peers are few, then clamped to 0.05–0.80.</p>';
+    R.global_median.toFixed(3) + ' when peers are few, then clamped to 0.05–0.80. ' + thinCats + ' of the ' +
+    R.category_multiples.length + ' multiples rest on a single peer, and ' + (thinRows1 + thinRows0) + ' of the ' +
+    R.rows.length + ' board rows sit on a multiple set by one peer (' + thinRows1 + ') or none (' + thinRows0 +
+    ') — those rows carry a warning in the detail view. The table lists ' + R.category_multiples.length +
+    ' categories with token-having peers while the board spans ' + Object.keys(boardCats).length + ': the ' +
+    noPeerCats + ' board categories with no peer at all take the global median, and ' + unusedCats +
+    ' peer categories have no pre-token row on the board, so their multiples are never used.</p>';
 
-  // Two-level method box (v5): the multiples table is folded by default;
-  // the jump link opens it and scrolls it into view, and ?multiples=1
-  // opens it on load (deep link + screenshot).
+  // Two-level method box (v5, v7): the outer box is folded by default so
+  // the board starts on the first screen; the multiples table is folded one
+  // level deeper. The jump link opens both levels and scrolls the table into
+  // view, and ?multiples=1 opens both on load (deep link + screenshot).
   var multiplesBox = document.getElementById('multiplesBox');
   document.getElementById('multJump').addEventListener('click', function (ev) {
     ev.preventDefault();
+    document.getElementById('method').open = true;
     multiplesBox.open = true;
     multiplesBox.scrollIntoView({ block: 'start' });
   });
-  if (params.get('multiples') === '1') multiplesBox.open = true;
+  if (params.get('multiples') === '1') {
+    document.getElementById('method').open = true;
+    multiplesBox.open = true;
+  }
+
+  // Sensitivity audit (v7): re-rank the board under one changed assumption
+  // at a time, computed here at render time from the same data.js the board
+  // uses — the published ranks are the base, only the variant implied values
+  // are recomputed. The build-time audit in lib/model.ts (buildSensitivity)
+  // computes the same table from the snapshot; the two agree exactly.
+  function clampNum(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  var sensCatMed = {};
+  R.category_multiples.forEach(function (c) {
+    if (c.peers > 0) sensCatMed[c.category] = (c.multiple * (c.peers + 6) - 6 * R.global_median) / c.peers;
+  });
+  function sensMultiple(cat, prior) {
+    var n = 0;
+    for (var i = 0; i < R.category_multiples.length; i++) {
+      if (R.category_multiples[i].category === cat) { n = R.category_multiples[i].peers; break; }
+    }
+    if (n === 0) return clampNum(R.global_median, 0.05, 0.8);
+    return clampNum((n * sensCatMed[cat] + prior * R.global_median) / (n + prior), 0.05, 0.8);
+  }
+  function sensImplied(r, o) {
+    var m = sensMultiple(r.category || '(no category)', o.prior);
+    var mom = r.change_7d === null ? 1 : 1 + (o.gw * clampNum(r.change_7d, o.lo, o.hi)) / 100;
+    var seas = r.age_days === null ? o.floor : o.floor + (1 - o.floor) * (Math.min(r.age_days, 1095) / 1095);
+    var br = 1 + o.bs * Math.min(Math.max(r.chains.length - 1, 0), 4);
+    var cred = 1;
+    if (r.change_7d === null) cred -= 0.03;
+    if (r.age_days === null) cred -= 0.03;
+    if (r.tvl_usd < 10000000) cred -= 0.02;
+    if (r.chains.length <= 1) cred -= 0.02;
+    cred = Math.max(0.9, cred);
+    return Math.max(1, Math.round(r.tvl_usd * m * mom * seas * br * cred));
+  }
+  function sensRanks(o) {
+    var arr = R.rows.map(function (r) { return { slug: r.slug, tvl: r.tvl_usd, imp: sensImplied(r, o) }; });
+    arr.sort(function (a, b) { return b.imp - a.imp || b.tvl - a.tvl || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0); });
+    var map = {};
+    arr.forEach(function (x, i) { map[x.slug] = i + 1; });
+    return map;
+  }
+  var SENS_DEF = { prior: 6, gw: 0.4, floor: 0.75, bs: 0.02, lo: -40, hi: 60 };
+  var SENS_VARS = [
+    ['Shrink prior 3 (peers weigh more)', { prior: 3 }],
+    ['Shrink prior 12 (peers weigh less)', { prior: 12 }],
+    ['Momentum weight 0.3', { gw: 0.3 }],
+    ['Momentum weight 0.5', { gw: 0.5 }],
+    ['Maturity floor 0.65', { floor: 0.65 }],
+    ['Maturity floor 0.85', { floor: 0.85 }],
+    ['No breadth bonus', { bs: 0 }],
+    ['Winsorise [-20%, +30%]', { lo: -20, hi: 30 }],
+    ['Prior 3 + momentum 0.5 (joint)', { prior: 3, gw: 0.5 }]
+  ];
+  function renderSensitivity() {
+    var baseRank = {};
+    R.rows.forEach(function (r) { baseRank[r.slug] = r.rank; });
+    var baseTop10 = {};
+    R.rows.forEach(function (r) { if (r.rank <= 10) baseTop10[r.slug] = true; });
+    var base1 = R.rows.filter(function (r) { return r.rank === 1; })[0];
+    var srows = SENS_VARS.map(function (v) {
+      var merged = {};
+      Object.keys(SENS_DEF).forEach(function (k) { merged[k] = SENS_DEF[k]; });
+      Object.keys(v[1]).forEach(function (k) { merged[k] = v[1][k]; });
+      var vr = sensRanks(merged);
+      var top10 = R.rows.filter(function (r) { return vr[r.slug] <= 10; });
+      var overlap = top10.filter(function (r) { return baseTop10[r.slug]; }).length;
+      var mx = 0, moved = 0;
+      R.rows.forEach(function (r) {
+        var d = Math.abs(vr[r.slug] - baseRank[r.slug]);
+        if (d > mx) mx = d;
+        if (d > 10) moved++;
+      });
+      var rank1 = R.rows.filter(function (r) { return vr[r.slug] === 1; })[0];
+      return { variant: v[0], top10: overlap, maxMove: mx, moved: moved, rank1Same: rank1.slug === base1.slug };
+    });
+    var allRank1 = srows.every(function (x) { return x.rank1Same; });
+    var minTop = Math.min.apply(null, srows.map(function (x) { return x.top10; }));
+    var maxTop = Math.max.apply(null, srows.map(function (x) { return x.top10; }));
+    // The calm single changes are rows 3–8; the joint change (last row) is
+    // reported on its own so it cannot hide inside that range.
+    var calmMax = Math.max.apply(null, srows.slice(2, 8).map(function (x) { return x.maxMove; }));
+    var joint = srows[srows.length - 1];
+    var thin1 = R.rows.filter(function (r) { return r.peers === 1; }).length;
+    var thin0 = R.rows.filter(function (r) { return r.peers === 0; }).length;
+    document.getElementById('sensitivity').innerHTML =
+      '<h3>Would the ranking survive different assumptions?</h3>' +
+      '<p>Each row re-ranks the whole board with one assumption changed and nothing else — the published board never moves. ' +
+      (allRank1 ? 'Rank #1 stays rank #1 under every variant, and the top 10 keeps ' + minTop + '–' + maxTop + ' of 10. ' : '') +
+      'Momentum, maturity, breadth and winsorising are calm: no row moves more than ' + calmMax + ' places. ' +
+      'The sensitive knob is the shrink prior: with prior 3, a row moves up to ' + srows[0].maxMove + ' places and ' +
+      srows[0].moved + ' rows move more than 10; with prior 12, ' + srows[1].maxMove + ' places and ' + srows[1].moved +
+      ' rows — because ' + (thin1 + thin0) + ' of 198 rows sit on a multiple set by one peer (' + thin1 + ') or none (' +
+      thin0 + '), so how much the category median weighs matters most exactly where the data is thinnest. ' +
+      'The one joint change (prior 3 with momentum 0.5) moves a row up to ' + joint.maxMove + ' places and ' +
+      joint.moved + ' rows more than 10 — barely further than the prior alone, so the two knobs do not amplify each other. ' +
+      'Read those rows with the peer warning below.</p>' +
+      '<div class="table-wrap"><table class="mult-table"><thead><tr><th>One change</th><th class="num">Top 10 kept</th><th class="num">Biggest rank move</th><th class="num">Rows moved &gt; 10</th><th>Rank #1 same?</th></tr></thead><tbody>' +
+      srows.map(function (x) {
+        return '<tr><td>' + esc(x.variant) + '</td><td class="num">' + x.top10 + ' / 10</td><td class="num">' + x.maxMove + '</td><td class="num">' + x.moved + '</td><td>' + (x.rank1Same ? 'yes' : 'no') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  renderSensitivity();
 
   var catSummary = document.getElementById('catSummary');
   // Full summary, computed from the rows (v5): the shipped Top 10 in
@@ -230,6 +355,14 @@
     // the leader, it is that sentence. (Replaces the v3 early-only read:
     // the early arithmetic now lives inside this line for every lens.)
     var lensRead = '<p class="compare">' + esc(detailLensRead(row)) + '</p>';
+    // Thin-multiple warning (v7): the peer count behind the multiple is
+    // already in the line below; when it is one peer or none, say what
+    // that means instead of leaving the number to speak for itself.
+    var peersBit = row.peers === 0
+      ? 'no token-having peer in its category, so the ' + row.multiple.toFixed(3) + '× multiple is the snapshot\u2019s global median'
+      : row.peers === 1
+        ? 'a single token-having peer sets the ' + row.multiple.toFixed(3) + '× multiple — one peer carries 1/7 of the weight'
+        : row.peers + ' token-having peers set the ' + row.multiple.toFixed(3) + '× multiple';
     detailEl.hidden = false;
     detailEl.innerHTML =
       '<button class="close" id="closeDetail">Close ×</button>' +
@@ -241,8 +374,7 @@
       spike +
       '<p class="compare">#' + row.category_rank + ' in ' + esc(row.category || 'no category') + ' · ' +
       (row.category_implied_share * 100).toFixed(1) + '% of its category\u2019s implied value · ' +
-      row.peers + ' token-having peer' + (row.peers === 1 ? '' : 's') + ' set the ' + row.multiple.toFixed(3) +
-      '× multiple · value density ' + row.density.toFixed(3) + '× · ' +
+      peersBit + ' · value density ' + row.density.toFixed(3) + '× · ' +
       (row.implied_value_usd / R.total_implied_usd * 100).toFixed(1) + '% of the board\u2019s total implied value.</p>' +
       '<div class="factors">' +
       factorBar('Category multiple', row.multiple, 0.8, row.multiple.toFixed(3) + '×') +
@@ -418,22 +550,26 @@
     return impliedSentence(list, filtered);
   }
 
-  // Detail lens read (v6): where this row stands under the current lens,
-  // against the lens leader over the whole board (not the filtered view —
-  // the detail is about the row, and the board-top sentence already
-  // covers the filtered case). The leader gets the board-top sentence
-  // itself; any other row gets its rank, its metric, and the same
-  // why-parts comparison, from its own side.
+  // Detail lens read (v6, v7): where this row stands under the current lens,
+  // against the lens leader. v7 measures it against the leader of the rows
+  // currently matching the filters — the same leader the board-top sentence
+  // reads — so the detail and the board-top sentence agree; with no filter
+  // on, that is the whole board, exactly as before. A row opened by a
+  // ?slug= link that matches no current filter falls back to the whole board.
   function detailLensRead(row) {
     var lens = lensEl.value;
-    var sorted = R.rows.slice().sort(function (a, b) { return metricOf(b, lens) - metricOf(a, lens); });
+    var scope = currentRows().list;
+    if (scope.indexOf(row) < 0) scope = R.rows;
+    var filtered = scope.length < R.rows.length;
+    var sorted = scope.slice().sort(function (a, b) { return metricOf(b, lens) - metricOf(a, lens); });
     var pos = sorted.indexOf(row) + 1;
     var leader = sorted[0];
-    if (pos === 1) return lensSentence(R.rows, lens, false);
+    if (pos === 1) return lensSentence(scope, lens, filtered);
     if (lens === 'early') {
       return 'Early-movers read: early score ' + row.early_score.toFixed(2) +
         ' = momentum ' + row.momentum.toFixed(2) + '× × youth ' + youthOf(row).toFixed(2) +
-        ' (' + ageExact(row) + '), ranking #' + pos + ' of ' + R.rows.length +
+        ' (' + ageExact(row) + '), ranking #' + pos + ' of ' + scope.length +
+        (filtered ? ' matching rows' : ' on the board') +
         ' — behind leader ' + leader.name + ' (' + leader.early_score.toFixed(2) + '), ' +
         cmpFactor('momentum', row.momentum, leader.momentum, function (v) { return v.toFixed(2) + '×'; }) +
         ', ' + cmpFactor('youth', youthOf(row), youthOf(leader), function (v) { return v.toFixed(2); }) + '.';
@@ -444,7 +580,7 @@
     var leadMetric = lens === 'density' ? leader.density.toFixed(3) + '×' : money(leader.implied_value_usd);
     var w = whyParts(row, leader);
     var onBits = [w.multBit, w.tvlBit].filter(function (x) { return x !== ''; }).join(' and ');
-    var text = label + ' read: ranks #' + pos + ' of ' + R.rows.length + ' by ' + metricName +
+    var text = label + ' read: ranks #' + pos + ' of ' + scope.length + (filtered ? ' matching rows' : '') + ' by ' + metricName +
       ' (' + metric + '), behind leader ' + leader.name + ' (' + leadMetric + ')' +
       (onBits ? ', on ' + onBits : '') +
       (w.leadsText ? ', leading on ' + w.leadsText : '') +
@@ -482,7 +618,7 @@
           : '<span class="bar" style="width:' + share + 'px"></span> ' + (share) + '%';
       return '<tr data-slug="' + esc(r.slug) + '">' +
         '<td>' + r.rank + '</td>' +
-        '<td class="name">' + esc(r.name) + (onWatchlist(r) ? '<span class="badge">WATCHLIST</span>' : '') + '<span class="subcat">' + esc(r.category || '—') + '</span></td>' +
+        '<td class="name">' + esc(r.name) + (onWatchlist(r) ? '<span class="badge">WATCHLIST</span>' : '') + '<span class="subcat">' + esc(r.category || '—') + ' · ' + r.chains.length + (r.chains.length === 1 ? ' chain' : ' chains') + '</span></td>' +
         '<td>' + esc(r.category || '—') + '</td>' +
         '<td>' + r.chains.length + '</td>' +
         '<td class="num">' + money(r.tvl_usd) + '</td>' +
